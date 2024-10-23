@@ -9,13 +9,28 @@ jobs:
   build:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@v3
       
       - name: Setup Deno
         uses: denoland/setup-deno@v1
+        with:
+          deno-version: "1.37.0"  # Specify a compatible version
         
+      - name: Remove existing lockfile
+        run: rm -f deno.lock
+        
+      - name: Cache dependencies
+        uses: actions/cache@v3
+        with:
+          path: |
+            ~/.deno
+            ~/.cache/deno
+          key: ${{ runner.os }}-deno-${{ hashFiles('**/*.ts') }}
+          
       - name: Build Executables
-        run: deno task build
+        run: |
+          deno cache main.ts  # Cache dependencies first
+          deno task build
         
       - name: Create Release
         id: create_release
@@ -25,6 +40,14 @@ jobs:
         with:
           tag_name: ${{ github.ref }}
           release_name: Release ${{ github.ref }}
+          body: |
+            Release ${{ github.ref }}
+            
+            ## Downloads
+            - [macOS ARM64 (M1/M2)](https://github.com/${{ github.repository }}/releases/download/${{ github.ref_name }}/auto-commit-darwin-arm64)
+            - [macOS Intel](https://github.com/${{ github.repository }}/releases/download/${{ github.ref_name }}/auto-commit-darwin-x64)
+            - [Windows](https://github.com/${{ github.repository }}/releases/download/${{ github.ref_name }}/auto-commit-windows-x64.exe)
+            - [Linux](https://github.com/${{ github.repository }}/releases/download/${{ github.ref_name }}/auto-commit-linux-x64)
           draft: false
           prerelease: false
           

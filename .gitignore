@@ -6,6 +6,9 @@ dist/
 .deno/
 *.lock.json
 
+# Deno
+deno.lock
+
 # Environment variables
 .env
 .env.*
@@ -33,4 +36,5 @@ tmp/
 # Logs
 *.log
 logs/
+
 

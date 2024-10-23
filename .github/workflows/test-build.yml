@@ -1,0 +1,27 @@
+name: Test Build
+
+on:
+  # Runs on pushes to main/master
+  push:
+    branches: [ main, master ]
+  # Optionally, also run on pull requests to main/master
+  pull_request:
+    branches: [ main, master ]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      
+      - name: Setup Deno
+        uses: denoland/setup-deno@v1
+        with:
+          deno-version: "1.37.0"
+          
+      - name: Test Build
+        run: |
+          rm -f deno.lock
+          deno cache main.ts
+          deno task build
+

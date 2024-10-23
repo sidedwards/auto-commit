@@ -19,8 +19,10 @@ jobs:
         with:
           deno-version: "1.37.0"  # Specify a compatible version
         
+      # Remove lockfile and cache dependencies
       - name: Build Executables
         run: |
+          rm -f deno.lock  # Remove existing lockfile
           deno cache main.ts  # Cache dependencies first
           deno task build
         

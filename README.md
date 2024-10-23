@@ -1,13 +1,13 @@
 # auto-commit
 
-AI-powered git commit message generator using Claude 3.
+Automatically generate git commit messages using AI. Analyzes your staged changes and creates clear, conventional commit messages.
 
 ## Features
 
-- Generates clear, concise commit messages based on your staged changes
+- Generates clear, concise commit messages from staged changes
 - Follows git commit message best practices
-- Edit messages in vim
-- Stores your API key securely
+- Interactive editing with vim
+- Secure API key storage
 - Simple CLI interface
 
 ## Installation

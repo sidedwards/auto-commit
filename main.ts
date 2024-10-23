@@ -27,7 +27,22 @@ function stopLoading(intervalId: number) {
 const COMMIT_PROMPT = `You are a Git Commit Message Generator that follows conventional commit standards. Generate commit messages directly without explanations or markdown formatting.
 
 1. Follow the format: <type>(<scope>): <subject>
-   Types: feat|fix|docs|style|refactor|test|chore
+   
+   Types:
+   - feat: New features or significant changes to functionality
+   - fix: Bug fixes
+   - docs: Documentation changes only (.md, comments)
+   - style: Code style/formatting changes
+   - refactor: Code changes that neither fix bugs nor add features
+   - test: Adding or modifying tests
+   - chore: Maintenance tasks, dependencies, config
+   
+   Choose type based on the file extension and changes:
+   - .ts, .js, .py etc → feat/fix/refactor for code changes
+   - .md → docs for documentation
+   - .css, .scss → style for styling
+   - .test.ts, .spec.js → test for tests
+   
    Subject: max 50 chars, imperative mood
 
 2. Structure the message with:

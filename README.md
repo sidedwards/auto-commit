@@ -63,12 +63,12 @@ Proposed commit:
 │ docs(README): update installation instructions                         │
 │                                                                        │
 │ - Add instructions for installing pre-built binary                     │
-│   * Separate steps for macOS (M1/M2 and Intel), Linux, and Windows    │
-│   * Move binary to PATH and make executable                           │
-│ - Add instructions for installing from source                         │
-│   * Install Deno                                                      │
-│   * Clone repo and install with Deno task                            │
-│ - Remove outdated development instructions                            │
+│   * Separate steps for macOS (M1/M2 and Intel), Linux, and Windows     │
+│   * Move binary to PATH and make executable                            │
+│ - Add instructions for installing from source                          │
+│   * Install Deno                                                       │
+│   * Clone repo and install with Deno task                              │
+│ - Remove outdated development instructions                             │
 └────────────────────────────────────────────────────────────────────────┘
 
 (a)ccept, (e)dit, (r)eject, (n)ew message?

@@ -24,34 +24,44 @@ function stopLoading(intervalId: number) {
     Deno.stdout.writeSync(new TextEncoder().encode('\x1B[?25h')); // Show cursor
 }
 
-// Add these constants at the top
-const COMMIT_PROMPT = `You are a Git Commit Message Generator. Create a detailed, specific commit message that:
+const COMMIT_PROMPT = `You are a Git Commit Message Generator that follows conventional commit standards. Generate commit messages directly without explanations or markdown formatting.
 
-1. Starts with the most significant change (max 50 chars)
-2. Uses imperative mood ("Add" not "Added")
-3. Separates subject from body with a blank line
-4. Includes detailed bullet points that explain:
-   - What changed
-   - Why it was changed
-   - Impact of the change
-5. Lists breaking changes with "BREAKING:" prefix
-6. Keeps technical implementation details minimal
+1. Follow the format: <type>(<scope>): <subject>
+   Types: feat|fix|docs|style|refactor|test|chore
+   Subject: max 50 chars, imperative mood
 
-Example:
-Add user authentication system
+2. Structure the message with:
+   - Header: Brief summary in present tense
+   - Blank line
+   - Body: Bullet points explaining what/why/impact
+   - Footer: Breaking changes, references
 
-- Add JWT-based authentication for all API routes
-  * Improves security by requiring token validation
-  * Enables user-specific access controls
-- Implement rate limiting to prevent abuse
-  * 100 requests per minute per user
-  * Configurable through environment variables
-- Add Redis for token storage and session management
-  * Enables horizontal scaling
-  * 24-hour token expiration
+3. Use precise, actionable language:
+   ✓ "Add user authentication"
+   ✗ "Added some auth stuff"
 
-BREAKING: All API routes now require Authorization header
-         Token format changed to JWT standard`;
+4. Include only:
+   • Specific changes made
+   • Reasoning behind changes
+   • Impact on functionality
+   • Breaking changes (if any)
+
+5. Mark breaking changes as:
+   BREAKING CHANGE: <description>
+
+RESPONSE FORMAT:
+<type>(<scope>): <subject>
+
+- Main change description
+  * Impact or detail
+  * Additional context
+- Secondary change
+  * Impact or detail
+  * Additional context
+
+BREAKING CHANGE: <description> (if applicable)
+
+Do not include any explanatory text, markdown formatting, or quotes around the message.`;
 
 // Function to call the Anthropic API
 async function getCommitMessage(diff: string, apiKey: string): Promise<string> {

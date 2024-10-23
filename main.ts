@@ -127,10 +127,31 @@ function findDefaultEditor(): string | null {
     return null;
 }
 
+// Add function to get staged file names
+async function getStagedFiles(): Promise<string[]> {
+    const command = new Deno.Command("git", {
+        args: ["diff", "--staged", "--name-only"],
+        stdout: "piped",
+        stderr: "piped",
+    });
+
+    const output = await command.output();
+    if (!output.success) {
+        const errorMessage = new TextDecoder().decode(output.stderr);
+        throw new Error(`Failed to get staged files: ${errorMessage}`);
+    }
+
+    return new TextDecoder()
+        .decode(output.stdout)
+        .trim()
+        .split("\n")
+        .filter(Boolean);
+}
+
 // Update checkStagedChanges function
 async function checkStagedChanges(): Promise<string> {
     const command = new Deno.Command("git", {
-        args: ["diff", "--staged"],
+        args: ["diff", "--staged", "--unified=3"],
         stdout: "piped",
         stderr: "piped",
     });
@@ -164,16 +185,33 @@ async function main() {
     }
 
     try {
-        // Check for staged changes
-        const diff = await checkStagedChanges();
+        // Get staged files first
+        const stagedFiles = await getStagedFiles();
         
-        if (!diff.trim()) {
+        if (stagedFiles.length === 0) {
             console.log("\n⚠ No staged changes found. Add files first with:");
             console.log("\n  git add <files>");
             console.log("\n  git add -p");
             return;
         }
 
+        // Show files that will be committed
+        console.log("\nStaged files to be committed:");
+        console.log('┌' + '─'.repeat(72) + '┐');
+        stagedFiles.forEach(file => {
+            console.log(`│ ${file.padEnd(70)} │`);
+        });
+        console.log('└' + '─'.repeat(72) + '┘\n');
+
+        // Confirm before proceeding
+        const proceed = prompt("Generate commit message for these files? (y/n) ");
+        if (proceed?.toLowerCase() !== 'y') {
+            console.log("\n✗ Operation cancelled.");
+            return;
+        }
+
+        // Get the diff and generate message
+        const diff = await checkStagedChanges();
         const commitMessage = await getCommitMessage(diff, apiKey);
 
         console.log("\nProposed commit:\n");
@@ -186,6 +224,16 @@ async function main() {
         switch (choice?.toLowerCase()) {
             case 'a':
                 // Implement actual git commit here
+                const commitCommand = new Deno.Command("git", {
+                    args: ["commit", "-m", commitMessage],
+                    stdout: "piped",
+                    stderr: "piped",
+                });
+                
+                const commitResult = await commitCommand.output();
+                if (!commitResult.success) {
+                    throw new Error(`Failed to commit: ${new TextDecoder().decode(commitResult.stderr)}`);
+                }
                 console.log("\n✓ Changes committed!");
                 break;
             case 'e':
@@ -195,7 +243,19 @@ async function main() {
                     console.log('┌' + '─'.repeat(72) + '┐');
                     console.log(editedMessage.split('\n').map(line => `│ ${line.padEnd(70)} │`).join('\n'));
                     console.log('└' + '─'.repeat(72) + '┘\n');
-                    // Implement actual git commit here with editedMessage
+                    
+                    // Implement git commit with edited message
+                    const editedCommitCommand = new Deno.Command("git", {
+                        args: ["commit", "-m", editedMessage],
+                        stdout: "piped",
+                        stderr: "piped",
+                    });
+                    
+                    const editedCommitResult = await editedCommitCommand.output();
+                    if (!editedCommitResult.success) {
+                        throw new Error(`Failed to commit: ${new TextDecoder().decode(editedCommitResult.stderr)}`);
+                    }
+                    console.log("\n✓ Changes committed with edited message!");
                 }
                 break;
             case 'n':

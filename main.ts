@@ -192,7 +192,7 @@ async function checkStagedChanges(): Promise<string> {
 }
 
 // CLI tool to read git diff and generate commit message
-async function main() {
+async function main(): Promise<void> {
     let apiKey = await getStoredApiKey();
     
     if (!apiKey) {

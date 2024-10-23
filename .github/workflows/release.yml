@@ -5,6 +5,9 @@ on:
     tags:
       - 'v*'
 
+permissions:
+  contents: write  # Required for creating releases and uploading assets
+
 jobs:
   build:
     runs-on: ubuntu-latest
@@ -16,17 +19,6 @@ jobs:
         with:
           deno-version: "1.37.0"  # Specify a compatible version
         
-      - name: Remove existing lockfile
-        run: rm -f deno.lock
-        
-      - name: Cache dependencies
-        uses: actions/cache@v3
-        with:
-          path: |
-            ~/.deno
-            ~/.cache/deno
-          key: ${{ runner.os }}-deno-${{ hashFiles('**/*.ts') }}
-          
       - name: Build Executables
         run: |
           deno cache main.ts  # Cache dependencies first

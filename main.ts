@@ -452,10 +452,55 @@ async function getDefaultFormat(): Promise<CommitFormat | null> {
 // Update main function to use stored styles
 async function main(): Promise<void> {
     const flags = parse(Deno.args, {
-        string: ["author", "style"],
-        boolean: ["learn", "list-authors", "reset-format"],
-        default: { learn: false, "list-authors": false },
+        string: ["author", "style", "format"],
+        boolean: ["help", "learn", "list-authors", "reset-format"],
+        default: { help: false, learn: false, "list-authors": false },
+        alias: { h: "help" },
     });
+
+    // Handle --help flag
+    if (flags.help) {
+        console.log(`
+auto-commit - AI-powered git commit message generator
+
+USAGE:
+    auto-commit [OPTIONS]
+    git ac  # if git alias configured
+
+OPTIONS:
+    -h, --help              Show this help message
+    --format=<style>        Use specific commit format:
+                           - conventional (default)
+                           - semantic (with emojis)
+                           - angular
+                           - kernel (Linux kernel style)
+    --learn                 Learn commit style from repository history
+    --author=<email>       Learn commit style from specific author
+    --list-authors         List all authors in repository
+    --reset-format         Reset to default commit format
+
+EXAMPLES:
+    # Use default format (conventional)
+    git add .
+    auto-commit
+
+    # Use specific format
+    auto-commit --format=semantic
+
+    # Learn from repository
+    auto-commit --learn
+
+    # Learn from author
+    auto-commit --learn --author="user@example.com"
+
+CONFIGURATION:
+    First run will prompt for Anthropic API key
+    Configs stored in ~/.config/auto-commit/
+
+For more information, visit: https://github.com/sidedwards/auto-commit
+`);
+        return;
+    }
 
     // Handle --list-authors flag
     if (flags["list-authors"]) {
@@ -497,7 +542,7 @@ async function main(): Promise<void> {
     if (typeof flags.format === 'string') {  // Type check the flag
         const formatInput = flags.format.toLowerCase();
         // Handle common typos and variations
-        if (formatInput.includes('kern')) {  // Change from startsWith to includes
+        if (formatInput.includes('kern')) {
             selectedFormat = CommitFormat.KERNEL;
         } else if (formatInput.includes('sem')) {
             selectedFormat = CommitFormat.SEMANTIC;
@@ -518,6 +563,7 @@ async function main(): Promise<void> {
         selectedFormat === CommitFormat.SEMANTIC ? SEMANTIC_FORMAT :
         selectedFormat === CommitFormat.ANGULAR ? ANGULAR_FORMAT :
         CONVENTIONAL_FORMAT;
+
     if (flags.learn) {
         try {
             const commits = await getCommitHistory(flags.author);

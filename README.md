@@ -15,7 +15,18 @@ Automatically generate git commit messages using Claude 3 Haiku. Analyzes your s
 
 ## Installation
 
-### Option 1: Pre-built Binary
+### Option 1: Quick Install (macOS/Linux)
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/sidedwards/auto-commit/main/scripts/install.sh | bash
+```
+
+This will:
+- Download the appropriate binary for your system
+- Add it to your PATH
+- Make it executable
+
+### Option 2: Manual Installation
 
 1. Download the latest release for your platform from [GitHub Releases](https://github.com/sidedwards/auto-commit/releases)
 2. Move to a location in your PATH:
@@ -37,7 +48,7 @@ sudo chmod +x /usr/local/bin/auto-commit
 move auto-commit-windows-x64.exe C:\Windows\System32\auto-commit.exe
 ```
 
-### Option 2: Install from Source
+### Option 3: Install from Source
 
 ````bash
 # Install Deno
@@ -52,12 +63,12 @@ deno task install
 ### Updating
 
 ```bash
+# If installed with quick install or manual binary
+curl -fsSL https://raw.githubusercontent.com/sidedwards/auto-commit/main/scripts/install.sh | bash
+
 # If installed from source
 cd auto-commit
 deno task update
-
-# If using pre-built binary
-# Download the latest release and follow installation steps above
 ```
 
 ## Usage

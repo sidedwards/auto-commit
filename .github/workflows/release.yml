@@ -49,7 +49,12 @@ jobs:
           body: |
             ${{ steps.release_notes.outputs.result }}
             
-            ## Downloads
+            ## Quick Install
+            ```bash
+            curl -fsSL https://raw.githubusercontent.com/${{ github.repository }}/main/scripts/install.sh | bash
+            ```
+            
+            ## Manual Downloads
             - [macOS ARM64 (M1/M2)](https://github.com/${{ github.repository }}/releases/download/${{ github.ref_name }}/auto-commit-darwin-arm64)
             - [macOS Intel](https://github.com/${{ github.repository }}/releases/download/${{ github.ref_name }}/auto-commit-darwin-x64)
             - [Windows](https://github.com/${{ github.repository }}/releases/download/${{ github.ref_name }}/auto-commit-windows-x64.exe)
@@ -67,3 +72,4 @@ jobs:
             dist/auto-commit-darwin-x64
             dist/auto-commit-windows-x64.exe
             dist/auto-commit-linux-x64
+            scripts/install.sh

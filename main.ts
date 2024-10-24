@@ -616,17 +616,21 @@ Generate commit messages directly without explanations or markdown formatting.`;
 ${flags.learn ? commitPrompt : formatTemplate}
 
 IMPORTANT: 
-1. Base your message ONLY on the actual changes in the diff
-2. Do not make assumptions or add fictional features
-3. Never include issue numbers unless they appear in the diff
-4. Do not include any format templates or placeholders
-5. Never output the response format template itself
-6. Only include ONE header line (<type>(<scope>): <subject>)
-7. Never duplicate any lines, especially the header
-8. Sort changes by priority and logical groups
-9. Never include preamble or explanation
-10. Never include the diff or any git-specific output
-11. Structure should be:
+1. Base your message on ALL changes in the diff
+2. Consider ALL files being modified (${stagedFiles.join(', ')})
+3. Do not focus only on the first file
+4. Summarize the overall changes across all files
+5. Include significant changes from each modified file
+6. Do not make assumptions or add fictional features
+7. Never include issue numbers unless they appear in the diff
+8. Do not include any format templates or placeholders
+9. Never output the response format template itself
+10. Only include ONE header line (<type>(<scope>): <subject>)
+11. Never duplicate any lines, especially the header
+12. Sort changes by priority and logical groups
+13. Never include preamble or explanation
+14. Never include the diff or any git-specific output
+15. Structure should be:
     - Single header line
     - Blank line
     - Body with bullet points

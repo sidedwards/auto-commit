@@ -4,6 +4,7 @@ import Anthropic from "npm:@anthropic-ai/sdk";
 import { ensureDir } from "https://deno.land/std/fs/ensure_dir.ts";
 import { join } from "https://deno.land/std/path/mod.ts";
 import { parse } from "https://deno.land/std/flags/mod.ts";
+import chalk from "npm:chalk@5";
 
 // Export enum first
 export enum CommitFormat {
@@ -16,6 +17,17 @@ export enum CommitFormat {
 }
 
 // Then define all other functions and constants
+const COLORS = {
+    success: chalk.green,
+    warning: chalk.yellow,
+    error: chalk.red,
+    info: chalk.blue,
+    dim: chalk.dim,
+    bold: chalk.bold,
+    header: chalk.cyan.bold,
+};
+
+// Update startLoading with chalk
 function startLoading(message: string): number {
     const frames = ['⠋', '⠙', '⠹', '⠸', '⠼', '⠴', '⠦', '⠧', '⠇', '⠏'];
     let i = 0;
@@ -23,7 +35,9 @@ function startLoading(message: string): number {
     Deno.stdout.writeSync(new TextEncoder().encode('\x1B[?25l')); // Hide cursor
     
     return setInterval(() => {
-        Deno.stdout.writeSync(new TextEncoder().encode(`\r${frames[i]} ${message}`));
+        const spinner = COLORS.info(frames[i]);
+        const msg = COLORS.dim(message);
+        Deno.stdout.writeSync(new TextEncoder().encode(`\r${spinner} ${msg}`));
         i = (i + 1) % frames.length;
     }, 80);
 }
@@ -457,6 +471,33 @@ async function getDefaultFormat(): Promise<CommitFormat | null> {
     }
 }
 
+// Add helper function for creating file tree
+function createFileTree(files: string[]): string[] {
+    const tree: string[] = [];
+    const sortedFiles = files.sort();
+    
+    for (const file of sortedFiles) {
+        const parts = file.split('/');
+        let prefix = '';
+        
+        if (parts.length === 1) {
+            tree.push(`${COLORS.dim('├──')} ${COLORS.info(file)}`);
+        } else {
+            const fileName = parts.pop()!;
+            const dir = parts.join('/');
+            prefix = COLORS.dim('│   ').repeat(parts.length - 1);
+            tree.push(`${prefix}${COLORS.dim('├──')} ${COLORS.info(fileName)}`);
+        }
+    }
+    
+    // Replace last '├──' with '└──'
+    if (tree.length > 0) {
+        tree[tree.length - 1] = tree[tree.length - 1].replace('├──', '└──');
+    }
+    
+    return tree;
+}
+
 // Update main function to use stored styles
 async function main(): Promise<void> {
     const flags = parse(Deno.args, {
@@ -628,7 +669,11 @@ For more information, visit: https://github.com/sidedwards/auto-commit
         // Try to load previously learned style
         const storedStyle = await getStoredCommitStyle(flags.author);
         if (storedStyle) {
-            console.log("\nUsing previously learned commit style.");
+            const formatName = selectedFormat.charAt(0).toUpperCase() + selectedFormat.slice(1);
+            console.log("\n" + COLORS.header("Format:") + " " + COLORS.info(formatName) + 
+                (flags.author ? ` (customized for ${flags.author})` : 
+                 selectedFormat === CommitFormat.REPO ? " (learned from repository)" : 
+                 " (default)"));
         }
     }
 
@@ -661,24 +706,24 @@ For more information, visit: https://github.com/sidedwards/auto-commit
         const stagedFiles = await getStagedFiles();
         
         if (stagedFiles.length === 0) {
-            console.log("\n⚠ No staged changes found. Add files first with:");
-            console.log("\n  git add <files>");
-            console.log("\n  git add -p");
+            console.log("\n" + COLORS.warning("⚠") + " No staged changes found. Add files first with:");
+            console.log("\n  " + COLORS.dim("git add <files>"));
+            console.log("\n  " + COLORS.dim("git add -p"));
             return;
         }
 
         // Show files that will be committed
-        console.log("\nStaged files to be committed:");
-        console.log('┌' + '─'.repeat(72) + '┐');
-        stagedFiles.forEach(file => {
-            console.log(` ${file.padEnd(70)} │`);
+        console.log("\n" + COLORS.header("Staged files to be committed:"));
+        console.log(COLORS.dim('┌' + '─'.repeat(72) + '┐'));
+        createFileTree(stagedFiles).forEach(line => {
+            console.log(COLORS.dim('│ ') + line.padEnd(70) + COLORS.dim(' │'));
         });
-        console.log('└' + '─'.repeat(72) + '┘\n');
+        console.log(COLORS.dim('└' + '─'.repeat(72) + '┘\n'));
 
         // Confirm before proceeding
         const proceed = prompt("Generate commit message for these files? (y/n) ");
         if (proceed?.toLowerCase() !== 'y') {
-            console.log("\n✗ Operation cancelled.");
+            console.log("\n" + COLORS.error("✗") + " Operation cancelled.");
             return;
         }
 
@@ -723,8 +768,8 @@ IMPORTANT:
                 systemPrompt
             );
 
-            console.log("\nProposed commit:\n");
-            console.log('┌' + '─'.repeat(72) + '┐');
+            console.log("\n" + COLORS.header("Proposed commit:") + "\n");
+            console.log(COLORS.dim('┌' + '─'.repeat(72) + '┐'));
             console.log(commitMessage.split('\n').map(line => {
                 // If line is longer than 70 chars, wrap it
                 if (line.length > 70) {
@@ -748,7 +793,7 @@ IMPORTANT:
                 // If line is <= 70 chars, pad it as before
                 return `│ ${line.padEnd(70)} │`;
             }).join('\n'));
-            console.log('└' + '─'.repeat(72) + '┘\n');
+            console.log(COLORS.dim('└' + '─'.repeat(72) + '┘\n'));
 
             const choice = prompt("(a)ccept, (e)dit, (r)eject, (n)ew message? ");
 
@@ -765,7 +810,7 @@ IMPORTANT:
                     if (!commitResult.success) {
                         throw new Error(`Failed to commit: ${new TextDecoder().decode(commitResult.stderr)}`);
                     }
-                    console.log("\n✓ Changes committed!");
+                    console.log("\n" + COLORS.success("✓") + " Changes committed!");
                     break;
                 }
                 case 'e': {
@@ -787,7 +832,7 @@ IMPORTANT:
                         if (!editedCommitResult.success) {
                             throw new Error(`Failed to commit: ${new TextDecoder().decode(editedCommitResult.stderr)}`);
                         }
-                        console.log("\n✓ Changes committed with edited message!");
+                        console.log("\n" + COLORS.success("✓") + " Changes committed with edited message!");
                     }
                     break;
                 }
@@ -795,7 +840,7 @@ IMPORTANT:
                     // Generate a new message with slightly different temperature
                     return await main(); // Restart the process
                 case 'r':
-                    console.log("\n✗ Commit message rejected.");
+                    console.log("\n" + COLORS.error("✗") + " Commit message rejected.");
                     break;
                 default:
                     console.log("\n⚠ Invalid selection.");
@@ -806,9 +851,9 @@ IMPORTANT:
         }
     } catch (error) {
         if (error instanceof Error) {
-            console.error("An error occurred:", error.message);
+            console.error(COLORS.error("Error:") + " An error occurred:", error.message);
         } else {
-            console.error("An unexpected error occurred");
+            console.error(COLORS.error("Error:") + " An unexpected error occurred");
         }
         return;
     }

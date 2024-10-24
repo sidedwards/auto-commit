@@ -10,7 +10,9 @@ export enum CommitFormat {
     CONVENTIONAL = 'conventional',
     SEMANTIC = 'semantic',
     ANGULAR = 'angular',
-    KERNEL = 'kernel'
+    KERNEL = 'kernel',
+    REPO = 'repo',
+    CUSTOM = 'custom',
 }
 
 // Then define all other functions and constants
@@ -463,6 +465,8 @@ async function main(): Promise<void> {
         alias: { h: "help" },
     });
 
+    let selectedFormat = CommitFormat.CONVENTIONAL;  // Add this line here
+
     // Handle --help flag
     if (flags.help) {
         console.log(`
@@ -544,34 +548,40 @@ For more information, visit: https://github.com/sidedwards/auto-commit
 
     // Handle format selection
     if (flags.learn) {
-        // Learning mode - analyze and store the style
-        const commits = await getCommitHistory(flags.author);
-        const styleGuide = await analyzeCommitStyle(commits, apiKey);
-        
-        // Store as both author-specific (if specified) and default style
-        if (flags.author) {
-            await storeCommitStyle(styleGuide, flags.author);
+        try {
+            const commits = await getCommitHistory(flags.author);
+            const styleGuide = await analyzeCommitStyle(commits, apiKey);
+            
+            if (flags.author) {
+                await storeCommitStyle(styleGuide, flags.author);
+                await storeDefaultFormat(CommitFormat.CUSTOM);
+                selectedFormat = CommitFormat.CUSTOM;
+                console.log(`\nLearned and saved commit style for ${flags.author}`);
+                console.log(`Using commit format: custom (${flags.author})`);
+            } else {
+                // Store repository style and use 'repo' as format
+                await storeCommitStyle(styleGuide);
+                await storeDefaultFormat(CommitFormat.REPO);
+                selectedFormat = CommitFormat.REPO;
+                console.log("\nLearned and saved commit style from repository");
+                console.log("Using commit format: repo");
+            }
+        } catch (error) {
+            console.error("Failed to learn commit style:", error);
+            console.log("Falling back to default commit style...");
         }
-        await storeCommitStyle(styleGuide); // Store as default
-        
-        // Remove this line - don't force Conventional format
-        // await storeDefaultFormat(CommitFormat.CONVENTIONAL);
-        
-        console.log(`\nLearned and saved commit style${flags.author ? ` for ${flags.author}` : ''}`);
     } else if (flags.format) {
-        // Explicit format specified
+        // Explicit format specified - store both format and its template
         const formatInput = flags.format.toLowerCase();
         let selectedFormat = CommitFormat.CONVENTIONAL;
         
-        // Handle common typos and variations
+        // Handle format selection as before
         if (formatInput.includes('kern')) {
             selectedFormat = CommitFormat.KERNEL;
         } else if (formatInput.includes('sem')) {
             selectedFormat = CommitFormat.SEMANTIC;
         } else if (formatInput.includes('ang')) {
             selectedFormat = CommitFormat.ANGULAR;
-        } else if (formatInput.includes('con')) {
-            selectedFormat = CommitFormat.CONVENTIONAL;
         }
 
         const template = 
@@ -581,12 +591,10 @@ For more information, visit: https://github.com/sidedwards/auto-commit
             CONVENTIONAL_FORMAT;
             
         await storeCommitStyle(template);
-        // Store the format as default
         await storeDefaultFormat(selectedFormat);
     }
 
     // Use format flag if provided
-    let selectedFormat = CommitFormat.CONVENTIONAL;  // default
     if (typeof flags.format === 'string') {  // Type check the flag
         const formatInput = flags.format.toLowerCase();
         // Handle common typos and variations
@@ -602,8 +610,6 @@ For more information, visit: https://github.com/sidedwards/auto-commit
     } else {
         selectedFormat = await getDefaultFormat() || CommitFormat.CONVENTIONAL;
     }
-
-    console.log(`Using commit format: ${selectedFormat}`);
 
     if (flags.learn) {
         try {

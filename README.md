@@ -159,14 +159,19 @@ The tool supports several commit message formats:
    Signed-off-by: John Doe <john@example.com>
    ```
 
-5. **Repository or Author-Specific**: Learn from repository history or specific author's style
+5. **Repository-Specific** (`--learn`): Learn and use the commit style from your repository's history
    ```
-   # Learn commit style from repository history 
+   # Learn and use repository-wide commit style
    auto-commit --learn
+   ```
 
-   # Learn commit style from specific author
+6. **Author-Specific** (`--learn --author`): Learn and use a specific author's commit style
+   ```
+   # Learn and use commit style from specific author
    auto-commit --learn --author="user@example.com"
    ```
+
+The learned styles (both repository and author-specific) are saved and will be used for future commits unless overridden with the `--format` flag.
 
 ## Requirements
 

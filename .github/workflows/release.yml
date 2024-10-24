@@ -17,14 +17,26 @@ jobs:
       - name: Setup Deno
         uses: denoland/setup-deno@v1
         with:
-          deno-version: "1.37.0"  # Specify a compatible version
+          deno-version: "1.37.0"
         
-      # Remove lockfile and cache dependencies
       - name: Build Executables
         run: |
-          rm -f deno.lock  # Remove existing lockfile
-          deno cache main.ts  # Cache dependencies first
+          rm -f deno.lock
+          deno cache main.ts
           deno task build
+        
+      - name: Generate Release Notes
+        uses: actions/github-script@v7
+        id: release_notes
+        with:
+          script: |
+            const { data: notes } = await github.rest.repos.generateReleaseNotes({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              tag_name: context.ref.replace('refs/tags/', '')
+            });
+            return notes.body;
+          result-encoding: string
         
       - name: Create Release
         id: create_release
@@ -35,7 +47,7 @@ jobs:
           tag_name: ${{ github.ref }}
           release_name: Release ${{ github.ref }}
           body: |
-            Release ${{ github.ref }}
+            ${{ steps.release_notes.outputs.result }}
             
             ## Downloads
             - [macOS ARM64 (M1/M2)](https://github.com/${{ github.repository }}/releases/download/${{ github.ref_name }}/auto-commit-darwin-arm64)

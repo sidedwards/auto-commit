@@ -204,9 +204,6 @@ async function analyzeCommitStyle(commits: string, apiKey: string): Promise<stri
 
 Format as plain text with no markdown or bullets. Number each rule.
 
-EXAMPLES:
-${CONVENTIONAL_FORMAT}
-
 Analyze these commits:
 
 ${commits}`
@@ -410,21 +407,30 @@ async function listAuthors(): Promise<void> {
     console.log('└────────┴──────────────────────────────────────────────────────────────┘\n');
 }
 
-// Add new functions to handle style storage
+// Add new functions for format management
 async function storeCommitStyle(style: string, author?: string): Promise<void> {
     const configDir = await getConfigDir();
-    const fileName = author ? `style-${author.replace(/[^a-zA-Z0-9]/g, '-')}` : 'style-repo';
-    const stylePath = join(configDir, fileName);
+    const stylePath = author 
+        ? join(configDir, `style-${author}`)
+        : join(configDir, "default-style");
     await Deno.writeTextFile(stylePath, style);
 }
 
 async function getStoredCommitStyle(author?: string): Promise<string | null> {
     try {
         const configDir = await getConfigDir();
-        const fileName = author ? `style-${author.replace(/[^a-zA-Z0-9]/g, '-')}` : 'style-repo';
-        const stylePath = join(configDir, fileName);
-        const style = await Deno.readTextFile(stylePath);
-        return style.trim();
+        // Try author-specific style first
+        if (author) {
+            try {
+                const authorStylePath = join(configDir, `style-${author}`);
+                return await Deno.readTextFile(authorStylePath);
+            } catch {
+                // Fall back to default style
+            }
+        }
+        // Try default style
+        const defaultStylePath = join(configDir, "default-style");
+        return await Deno.readTextFile(defaultStylePath);
     } catch {
         return null;
     }
@@ -452,9 +458,8 @@ async function getDefaultFormat(): Promise<CommitFormat | null> {
 // Update main function to use stored styles
 async function main(): Promise<void> {
     const flags = parse(Deno.args, {
-        string: ["author", "style", "format"],
-        boolean: ["help", "learn", "list-authors", "reset-format"],
-        default: { help: false, learn: false, "list-authors": false },
+        string: ["author", "format"],
+        boolean: ["help", "learn", "list-authors"],
         alias: { h: "help" },
     });
 
@@ -537,6 +542,49 @@ For more information, visit: https://github.com/sidedwards/auto-commit
         }
     }
 
+    // Handle format selection
+    if (flags.learn) {
+        // Learning mode - analyze and store the style
+        const commits = await getCommitHistory(flags.author);
+        const styleGuide = await analyzeCommitStyle(commits, apiKey);
+        
+        // Store as both author-specific (if specified) and default style
+        if (flags.author) {
+            await storeCommitStyle(styleGuide, flags.author);
+        }
+        await storeCommitStyle(styleGuide); // Store as default
+        
+        // Remove this line - don't force Conventional format
+        // await storeDefaultFormat(CommitFormat.CONVENTIONAL);
+        
+        console.log(`\nLearned and saved commit style${flags.author ? ` for ${flags.author}` : ''}`);
+    } else if (flags.format) {
+        // Explicit format specified
+        const formatInput = flags.format.toLowerCase();
+        let selectedFormat = CommitFormat.CONVENTIONAL;
+        
+        // Handle common typos and variations
+        if (formatInput.includes('kern')) {
+            selectedFormat = CommitFormat.KERNEL;
+        } else if (formatInput.includes('sem')) {
+            selectedFormat = CommitFormat.SEMANTIC;
+        } else if (formatInput.includes('ang')) {
+            selectedFormat = CommitFormat.ANGULAR;
+        } else if (formatInput.includes('con')) {
+            selectedFormat = CommitFormat.CONVENTIONAL;
+        }
+
+        const template = 
+            selectedFormat === CommitFormat.KERNEL ? KERNEL_FORMAT :
+            selectedFormat === CommitFormat.SEMANTIC ? SEMANTIC_FORMAT :
+            selectedFormat === CommitFormat.ANGULAR ? ANGULAR_FORMAT :
+            CONVENTIONAL_FORMAT;
+            
+        await storeCommitStyle(template);
+        // Store the format as default
+        await storeDefaultFormat(selectedFormat);
+    }
+
     // Use format flag if provided
     let selectedFormat = CommitFormat.CONVENTIONAL;  // default
     if (typeof flags.format === 'string') {  // Type check the flag
@@ -557,13 +605,6 @@ For more information, visit: https://github.com/sidedwards/auto-commit
 
     console.log(`Using commit format: ${selectedFormat}`);
 
-    // Set the appropriate format template
-    let commitPrompt = flags.learn ? CONVENTIONAL_FORMAT : 
-        selectedFormat === CommitFormat.KERNEL ? KERNEL_FORMAT :
-        selectedFormat === CommitFormat.SEMANTIC ? SEMANTIC_FORMAT :
-        selectedFormat === CommitFormat.ANGULAR ? ANGULAR_FORMAT :
-        CONVENTIONAL_FORMAT;
-
     if (flags.learn) {
         try {
             const commits = await getCommitHistory(flags.author);
@@ -571,12 +612,6 @@ For more information, visit: https://github.com/sidedwards/auto-commit
             
             // Store the learned style
             await storeCommitStyle(styleGuide, flags.author);
-            
-            commitPrompt = `You are a Git Commit Message Generator that follows the conventions below:
-
-${styleGuide}
-
-Generate commit messages directly without explanations or markdown formatting.`;
             
             console.log("\nLearned and saved commit style from repository history.");
         } catch (error) {
@@ -587,12 +622,6 @@ Generate commit messages directly without explanations or markdown formatting.`;
         // Try to load previously learned style
         const storedStyle = await getStoredCommitStyle(flags.author);
         if (storedStyle) {
-            commitPrompt = `You are a Git Commit Message Generator that follows the conventions below:
-
-${storedStyle}
-
-Generate commit messages directly without explanations or markdown formatting.`;
-            
             console.log("\nUsing previously learned commit style.");
         }
     }
@@ -659,7 +688,7 @@ Generate commit messages directly without explanations or markdown formatting.`;
             // Create the system prompt
             const systemPrompt = `You are a Git Commit Message Generator. Generate ONLY a commit message following this commit format:
 
-${flags.learn ? commitPrompt : formatTemplate}
+${flags.learn || flags.author ? await getStoredCommitStyle(flags.author) : formatTemplate}
 
 IMPORTANT: 
 1. Base your message on ALL changes in the diff
@@ -671,7 +700,7 @@ IMPORTANT:
 7. Never include issue numbers unless they appear in the diff
 8. Do not include any format templates or placeholders
 9. Never output the response format template itself
-10. Only include ONE header line (<type>(<scope>): <subject>)
+10. Only include ONE header line
 11. Never duplicate any lines, especially the header
 12. Sort changes by priority and logical groups
 13. Never include preamble or explanation

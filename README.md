@@ -123,14 +123,17 @@ On first run, you'll be prompted to enter your [Anthropic API key](https://conso
 
 ### Commit Formats
 
-The tool supports several commit message formats:
+The tool supports multiple commit message formats:
 
-1. **Conventional** (default): `type(scope): description`
+1. **Conventional** (default) - [specification](https://www.conventionalcommits.org/en/v1.0.0/)
    ```
    feat(auth): add OAuth2 authentication
+   
+   - Add login endpoints
+   - Set up token management
    ```
 
-2. **Angular**: Similar to conventional but with stricter rules
+2. **Angular** - [specification](https://github.com/angular/angular/blob/main/CONTRIBUTING.md#commit)
    ```
    feat(auth): implement OAuth2 authentication
 
@@ -140,40 +143,41 @@ The tool supports several commit message formats:
    BREAKING CHANGE: Remove basic auth support
    ```
 
-3. **Semantic** (with emojis): `emoji description`
+3. **Semantic** - includes emojis for visual clarity
    ```
-   ✨ Add new user authentication system
-
-   - Implement OAuth2 flow
-   - Add session management
-
-   Closes #123
+   ✨ Add OAuth2 authentication
+   
+   - Add login endpoints
+   - Set up token management
    ```
 
-4. **Linux Kernel**: `subsystem: change summary`
+4. **Linux Kernel** - [style guide](https://www.kernel.org/doc/html/latest/process/submitting-patches.html#describe-your-changes)
    ```
    auth: implement secure token rotation
-
+   
    Previous implementation had security flaws.
-   This patch adds automatic rotation with
-   proper invalidation of old tokens.
-
+   This patch adds automatic rotation.
+   
    Signed-off-by: John Doe <john@example.com>
    ```
 
-5. **Repository-Specific** (`--learn`): Learn and use the commit style from your repository's history
-   ```
-   # Learn and use repository-wide commit style
+5. **Custom Styles**
+   ```bash
+   # Learn from repository history
    auto-commit --learn
-   ```
-
-6. **Author-Specific** (`--learn --author`): Learn and use a specific author's commit style
-   ```
-   # Learn and use commit style from specific author
+   
+   # Learn from specific author
    auto-commit --learn --author="user@example.com"
    ```
+   The tool can learn and adopt commit styles from your repository's history or a specific author's commits.
 
-The learned styles (both repository and author-specific) are saved and will be used for future commits unless overridden with the `--format` flag.
+Override the format using `--format`:
+```bash
+auto-commit --format conventional  # default
+auto-commit --format angular      # Angular style
+auto-commit --format semantic     # with emojis
+auto-commit --format kernel       # Linux style
+```
 
 ## Requirements
 

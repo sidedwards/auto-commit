@@ -498,6 +498,40 @@ function createFileTree(files: string[]): string[] {
     return tree;
 }
 
+// Add helper function for format display
+function getFormatDisplayName(format: CommitFormat, author?: string): string {
+    const formatName = format.charAt(0).toUpperCase() + format.slice(1);
+    const context = author ? ` (customized for ${author})` :
+                   format === CommitFormat.REPO ? " (learned from repository)" :
+                   format === CommitFormat.CUSTOM ? " (custom)" :
+                   " (default)";
+    
+    return COLORS.header("Format:") + " " + COLORS.info(formatName) + COLORS.dim(context);
+}
+
+// Add helper function for format template selection
+async function getFormatTemplate(format: CommitFormat, author?: string): Promise<string> {
+    // If using author-specific style, use stored style
+    if (author) {
+        return await getStoredCommitStyle(author) || CONVENTIONAL_FORMAT;
+    }
+    
+    // Otherwise use the appropriate format
+    switch (format) {
+        case CommitFormat.KERNEL:
+            return KERNEL_FORMAT;
+        case CommitFormat.SEMANTIC:
+            return SEMANTIC_FORMAT;
+        case CommitFormat.ANGULAR:
+            return ANGULAR_FORMAT;
+        case CommitFormat.REPO:
+        case CommitFormat.CUSTOM:
+            return await getStoredCommitStyle() || CONVENTIONAL_FORMAT;
+        default:
+            return CONVENTIONAL_FORMAT;
+    }
+}
+
 // Update main function to use stored styles
 async function main(): Promise<void> {
     const flags = parse(Deno.args, {
@@ -506,7 +540,7 @@ async function main(): Promise<void> {
         alias: { h: "help" },
     });
 
-    let selectedFormat = CommitFormat.CONVENTIONAL;  // Add this line here
+    let selectedFormat = await getDefaultFormat() || CommitFormat.CONVENTIONAL;
 
     // Handle --help flag
     if (flags.help) {
@@ -595,21 +629,20 @@ For more information, visit: https://github.com/sidedwards/auto-commit
             
             if (flags.author) {
                 await storeCommitStyle(styleGuide, flags.author);
+                await storeCommitStyle(styleGuide);  // Also store as default
                 await storeDefaultFormat(CommitFormat.CUSTOM);
                 selectedFormat = CommitFormat.CUSTOM;
-                console.log(`\nLearned and saved commit style for ${flags.author}`);
-                console.log(`Using commit format: custom (${flags.author})`);
             } else {
-                // Store repository style and use 'repo' as format
                 await storeCommitStyle(styleGuide);
                 await storeDefaultFormat(CommitFormat.REPO);
                 selectedFormat = CommitFormat.REPO;
-                console.log("\nLearned and saved commit style from repository");
-                console.log("Using commit format: repo");
             }
+            
+            console.log("\n" + getFormatDisplayName(selectedFormat, flags.author));
         } catch (error) {
-            console.error("Failed to learn commit style:", error);
-            console.log("Falling back to default commit style...");
+            console.error(COLORS.error("Error:") + " Failed to learn commit style:", error);
+            console.log(COLORS.dim("Falling back to default commit style..."));
+            selectedFormat = CommitFormat.CONVENTIONAL;
         }
     } else if (flags.format) {
         // Explicit format specified - store both format and its template
@@ -731,15 +764,12 @@ For more information, visit: https://github.com/sidedwards/auto-commit
         try {
             const diff = await checkStagedChanges();
             // Get the appropriate format template
-            const formatTemplate = selectedFormat === CommitFormat.KERNEL ? KERNEL_FORMAT :
-                                    selectedFormat === CommitFormat.SEMANTIC ? SEMANTIC_FORMAT :
-                                    selectedFormat === CommitFormat.ANGULAR ? ANGULAR_FORMAT :
-                                    CONVENTIONAL_FORMAT;
+            const formatTemplate = await getFormatTemplate(selectedFormat, flags.author);
     
             // Create the system prompt
-            const systemPrompt = `You are a Git Commit Message Generator. Generate ONLY a commit message following this commit format:
+            const systemPrompt = `You are a Git Commit Message Generator. Generate ONLY a commit message following this format:
 
-${flags.learn || flags.author ? await getStoredCommitStyle(flags.author) : formatTemplate}
+${formatTemplate}
 
 IMPORTANT: 
 1. Base your message on ALL changes in the diff

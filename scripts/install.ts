@@ -1,4 +1,4 @@
-#!/usr/bin/env -S deno run --allow-read --allow-write --allow-run
+#!/usr/bin/env -S deno run --allow-read --allow-write --allow-run="git,vim,gh,deno"
 
 import { join } from "https://deno.land/std/path/mod.ts";
 

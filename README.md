@@ -163,7 +163,15 @@ The tool supports multiple commit message formats:
    Signed-off-by: John Doe <john@example.com>
    ```
 
-5. **Custom Styles**
+5. **GitHub Issue-reference** - [specification](https://docs.github.com/en/issues/tracking-your-work-with-issues/linking-a-pull-request-to-an-issue)
+   ```
+   [#123]: implement OAuth2 authentication
+
+   - Add login endpoints
+   - Set up token management
+   ```
+
+6. **Custom Styles**
    ```bash
    # Learn from repository history
    auto-commit --learn

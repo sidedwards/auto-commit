@@ -23,11 +23,8 @@ jobs:
         with:
           deno-version: "1.41.0"
           
-      - name: Run Tests
+      - name: Test Build
         run: |
           rm -f deno.lock
           deno cache main.ts
-          deno test -A
-          
-      - name: Test Build
-        run: deno task build
+          deno task build

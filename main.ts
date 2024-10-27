@@ -418,7 +418,7 @@ Include the issue ID as a reference according to the commit message format.`;
             system: systemPrompt,
             messages: [{ 
                 role: "user", 
-                content: `Generate a commit message for ALL key changes from the diff:\n\n${diff}\n\nIMPORTANT: 
+                content: `Generate a commit message summarizing all key changes from the diff:\n\n${diff}\n\nIMPORTANT: 
 1. Do not include any explanatory text or formatting
 2. Do not make up features, changes, or issue numbers not present in the diff
 3. Do not repeat the header line

@@ -1,8 +1,14 @@
 {
   "version": "4",
   "specifiers": {
+    "jsr:@std/fmt@*": "1.0.3",
     "npm:@anthropic-ai/sdk@*": "0.30.0",
     "npm:chalk@5": "5.3.0"
+  },
+  "jsr": {
+    "@std/fmt@1.0.3": {
+      "integrity": "97765c16aa32245ff4e2204ecf7d8562496a3cb8592340a80e7e554e0bb9149f"
+    }
   },
   "npm": {
     "@anthropic-ai/sdk@0.30.0": {

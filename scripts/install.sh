@@ -2,6 +2,20 @@
 set -e
 
 main() {
+    # Check for required dependencies
+    if ! command -v gh &> /dev/null; then
+        echo "GitHub CLI (gh) is required but not found."
+        echo "Install instructions: https://cli.github.com/manual/installation"
+        exit 1
+    }
+
+    # Check if gh is authenticated
+    if ! gh auth status &> /dev/null; then
+        echo "GitHub CLI is not authenticated. Please run:"
+        echo "  gh auth login"
+        exit 1
+    fi
+
     BIN_DIR=${BIN_DIR-"$HOME/.bin"}
     mkdir -p $BIN_DIR
 

@@ -14,6 +14,7 @@ export enum CommitFormat {
     KERNEL = 'kernel',
     REPO = 'repo',
     CUSTOM = 'custom',
+    ISSUE_REFERENCE = 'issue',  // Add new format
 }
 
 // Then define all other functions and constants
@@ -173,6 +174,24 @@ Signed-off-by: <author> <email>
 
 IMPORTANT: Replace all placeholders with real values from the diff.`;
 
+const ISSUE_FORMAT = `1. Follow the issue reference format:
+    Rules:
+    1. First line must be "[#ISSUE_ID_IF_ANY]: brief description"
+    2. If no issue is found, just include the brief description
+    3. Description should be clear and concise
+    4. Use present tense, imperative mood
+    5. Reference only issues mentioned in the diff
+    6. DO NOT make up an issue ID
+    
+RESPONSE FORMAT:
+[#ISSUE_ID_IF_ANY]: brief description
+
+- Main implementation details
+- Additional changes
+- Impact or considerations
+
+Related: #ISSUE_ID_IF_ANY (only if mentioned in diff)`;
+
 // Add new function to get commit history for analysis
 async function getCommitHistory(author?: string, limit = 50): Promise<string> {
     const args = ["log", `-${limit}`, "--pretty=format:%s%n%b%n---"];
@@ -237,6 +256,82 @@ ${commits}`
     }
 }
 
+// Add function to get related issues
+async function getRelatedIssues(diff: string): Promise<Array<{number: number, title: string}>> {
+    try {
+        // Extract potential issue numbers from diff
+        const issueRefs = diff.match(/#\d+/g) || [];
+        const uniqueIssues = [...new Set(issueRefs.map(ref => ref.slice(1)))];
+
+        if (uniqueIssues.length > 0) {
+            // Verify existence of issues using GitHub CLI
+            const command = new Deno.Command("gh", {
+                args: ["issue", "list", 
+                      "--json", "number,title",
+                      "--limit", "100",
+                      "-R", ".", // current repo
+                      ...uniqueIssues.map(issue => `#${issue}`)],
+                stdout: "piped",
+                stderr: "piped",
+            });
+
+            const output = await command.output();
+            if (!output.success) {
+                throw new Error(`Failed to fetch issues: ${new TextDecoder().decode(output.stderr)}`);
+            }
+
+            const issues = JSON.parse(new TextDecoder().decode(output.stdout));
+            return issues.filter(issue => uniqueIssues.includes(issue.number.toString()));
+        }
+
+        // If no direct issue references, search for issues using keywords
+        const keywords = extractKeywordsFromDiff(diff);
+        if (keywords.length === 0) return [];
+
+        const searchCommand = new Deno.Command("gh", {
+            args: ["search", "issues", 
+                  "--json", "number,title",
+                  "--limit", "5",
+                  "-R", ".", // current repo
+                  ...keywords],
+            stdout: "piped",
+            stderr: "piped",
+        });
+
+        const searchOutput = await searchCommand.output();
+        if (!searchOutput.success) {
+            throw new Error(`Failed to fetch issues: ${new TextDecoder().decode(searchOutput.stderr)}`);
+        }
+
+        return JSON.parse(new TextDecoder().decode(searchOutput.stdout));
+    } catch {
+        return [];
+    }
+}
+
+function extractKeywordsFromDiff(diff: string): string[] {
+    // Define a set of common words to ignore
+    const commonWords = new Set([
+        'the', 'and', 'for', 'with', 'this', 'that', 'from', 'are', 'was', 'were', 
+        'will', 'would', 'could', 'should', 'have', 'has', 'had', 'not', 'but', 
+        'or', 'if', 'then', 'else', 'when', 'while', 'do', 'does', 'did', 'done',
+        'in', 'on', 'at', 'by', 'to', 'of', 'a', 'an', 'is', 'it', 'as', 'be', 
+        'can', 'may', 'might', 'must', 'shall', 'which', 'who', 'whom', 'whose',
+        'what', 'where', 'why', 'how', 'all', 'any', 'some', 'no', 'none', 'one',
+        'two', 'three', 'four', 'five', 'six', 'seven', 'eight', 'nine', 'ten'
+    ]);
+
+    // Use a regular expression to extract words and identifiers
+    const words = diff.match(/\b\w+\b/g) || [];
+
+    // Filter out common words and return unique keywords
+    const keywords = words
+        .filter(word => !commonWords.has(word.toLowerCase()))
+        .map(word => word.toLowerCase());
+
+    return [...new Set(keywords)];
+}
+
 // Update getCommitMessage function signature to remove test client
 async function getCommitMessage(
     diff: string, 
@@ -244,8 +339,20 @@ async function getCommitMessage(
     systemPrompt?: string,
 ): Promise<string> {
     const loadingId = startLoading('Generating commit message...');
-            
+    
     try {
+        // Get related issues first
+        const relatedIssues = await getRelatedIssues(diff);
+        const selectedFormat: CommitFormat = await getDefaultFormat() || CommitFormat.CONVENTIONAL;
+        
+        // Add issue context to system prompt if using ISSUE_REFERENCE format
+        if (selectedFormat === CommitFormat.ISSUE_REFERENCE && relatedIssues.length > 0) {
+            systemPrompt += `\n\nRelated issues:\n${
+                relatedIssues.map(issue => `#${issue.number}: ${issue.title}`).join('\n')
+            }`;
+        }
+        console.log(systemPrompt);
+        
         const anthropic = new Anthropic({
             apiKey: apiKey,
         });
@@ -293,21 +400,9 @@ async function getCommitMessage(
                 bodyLines.push(line);
             }
         }
-
-        // Combine with proper spacing
-        const parts = [
-            headerLine,
-            '',  // Blank line after header
-            ...bodyLines
-        ];
-
-        // Add breaking changes with blank line before them if they exist
-        if (breakingChanges.length > 0) {
-            parts.push('');  // Extra blank line before breaking changes
-            parts.push(...breakingChanges);
-        }
-
-        return parts.join('\n');
+        
+        // Return the formatted commit message
+        return `${headerLine}\n\n${bodyLines.join('\n')}\n\n${breakingChanges.join('\n')}`;
     } finally {
         stopLoading(loadingId);
     }
@@ -413,7 +508,7 @@ async function listAuthors(): Promise<void> {
     console.log("\nRepository Authors:");
     console.log('┌────────┬──────────────────────────────────────────────────────────────┐');
     console.log('│ Commits│ Author                                                       │');
-    console.log('├────────┼──────────────────────────────────────────────────────────────┤');
+    console.log('├────────┼───────────────────────────────────────────────────────────────');
     
     authors.forEach(({ count, author }) => {
         const countStr = count.toString().padStart(6);
@@ -527,6 +622,8 @@ async function getFormatTemplate(format: CommitFormat, author?: string): Promise
         case CommitFormat.REPO:
         case CommitFormat.CUSTOM:
             return await getStoredCommitStyle() || CONVENTIONAL_FORMAT;
+        case CommitFormat.ISSUE_REFERENCE:
+            return ISSUE_FORMAT;
         default:
             return CONVENTIONAL_FORMAT;
     }
@@ -680,6 +777,8 @@ For more information, visit: https://github.com/sidedwards/auto-commit
             selectedFormat = CommitFormat.ANGULAR;
         } else if (formatInput.includes('con')) {
             selectedFormat = CommitFormat.CONVENTIONAL;
+        } else if (formatInput.includes('iss')) {
+            selectedFormat = CommitFormat.ISSUE_REFERENCE;
         }
     } else {
         selectedFormat = await getDefaultFormat() || CommitFormat.CONVENTIONAL;
@@ -716,7 +815,8 @@ For more information, visit: https://github.com/sidedwards/auto-commit
             '1': CommitFormat.CONVENTIONAL,
             '2': CommitFormat.SEMANTIC,
             '3': CommitFormat.ANGULAR,
-            '4': CommitFormat.KERNEL
+            '4': CommitFormat.KERNEL,
+            '5': CommitFormat.ISSUE_REFERENCE
         };
 
         console.log("\nChoose default commit format:");
@@ -724,8 +824,9 @@ For more information, visit: https://github.com/sidedwards/auto-commit
         console.log("2. Semantic (with emojis)");
         console.log("3. Angular");
         console.log("4. Linux Kernel");
+        console.log("5. Issue Reference ([#123]: description)");
 
-        const formatChoice = prompt("Select format (1-4): ") || "1";
+        const formatChoice = prompt("Select format (1-5): ") || "1";
         selectedFormat = formatChoices[formatChoice as keyof typeof formatChoices] || CommitFormat.CONVENTIONAL;
         
         // Store the choice

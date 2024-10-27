@@ -12,6 +12,7 @@ Automatically generate git commit messages using Claude 3 Haiku. Analyzes your s
   - Angular
   - Semantic Git Commits (with emojis)
   - Linux Kernel style
+  - GitHub issue-reference style ([#123]: description)
   - Repository or author-specific commit styles
 - Simple CLI interface
 
@@ -88,6 +89,7 @@ auto-commit --format=conventional  # default
 auto-commit --format=angular      # Angular style
 auto-commit --format=semantic     # with emojis
 auto-commit --format=kernel       # Linux kernel style
+auto-commit --format=issue       # Issue reference style
 
 # View repository authors
 auto-commit --list-authors
@@ -182,6 +184,7 @@ auto-commit --format kernel       # Linux style
 ## Requirements
 
 - Git
+- GitHub CLI (gh) - for issue integration
 - Vim (for editing commit messages)
 - Anthropic API key
 

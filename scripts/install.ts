@@ -28,7 +28,7 @@ async function install() {
             "--allow-read",
             "--allow-write",
             "--allow-env",
-            "--allow-run=git,vim",
+            "--allow-run=git,vim,gh",
             "--output",
             scriptPath,
             "main.ts"

@@ -8,20 +8,26 @@ on:
   pull_request:
     branches: [ main, master ]
 
+permissions:
+  contents: read
+  pull-requests: read
+
 jobs:
   build:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
       
       - name: Setup Deno
         uses: denoland/setup-deno@v1
         with:
-          deno-version: "1.37.0"
+          deno-version: "1.41.0"
+          
+      - name: Run Tests
+        run: deno test -A
           
       - name: Test Build
         run: |
           rm -f deno.lock
           deno cache main.ts
           deno task build
-

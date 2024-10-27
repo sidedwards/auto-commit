@@ -4,7 +4,7 @@ import Anthropic from "npm:@anthropic-ai/sdk";
 import { ensureDir } from "https://deno.land/std/fs/ensure_dir.ts";
 import { join } from "https://deno.land/std/path/mod.ts";
 import { parse } from "https://deno.land/std/flags/mod.ts";
-import chalk from "npm:chalk@5";
+import * as colors from "jsr:@std/fmt/colors";
 
 // Export enum first
 export enum CommitFormat {
@@ -19,14 +19,14 @@ export enum CommitFormat {
 
 // Then define all other functions and constants
 const COLORS = {
-    success: chalk.green,
-    warning: chalk.yellow,
-    error: chalk.red,
-    info: chalk.blue,
-    dim: chalk.dim,
-    bold: chalk.bold,
-    header: chalk.cyan.bold,
-    action: chalk.yellow.bold, // Add this for action keys
+    success: colors.green,
+    warning: colors.yellow,
+    error: colors.red,
+    info: colors.blue,
+    dim: colors.dim,
+    bold: colors.bold,
+    header: (s: string) => colors.bold(colors.cyan(s)),
+    action: (s: string) => colors.bold(colors.yellow(s)),
 };
 
 // Update startLoading with chalk

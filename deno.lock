@@ -143,6 +143,7 @@
   "redirects": {
     "https://deno.land/std/assert/mod.ts": "https://deno.land/std@0.224.0/assert/mod.ts",
     "https://deno.land/std/flags/mod.ts": "https://deno.land/std@0.224.0/flags/mod.ts",
+    "https://deno.land/std/fmt/colors.ts": "https://deno.land/std@0.224.0/fmt/colors.ts",
     "https://deno.land/std/fs/ensure_dir.ts": "https://deno.land/std@0.224.0/fs/ensure_dir.ts",
     "https://deno.land/std/http/server.ts": "https://deno.land/std@0.224.0/http/server.ts",
     "https://deno.land/std/path/mod.ts": "https://deno.land/std@0.224.0/path/mod.ts",

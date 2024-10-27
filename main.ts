@@ -4,7 +4,7 @@ import Anthropic from "npm:@anthropic-ai/sdk";
 import { ensureDir } from "https://deno.land/std/fs/ensure_dir.ts";
 import { join } from "https://deno.land/std/path/mod.ts";
 import { parse } from "https://deno.land/std/flags/mod.ts";
-import * as colors from "jsr:@std/fmt/colors";
+import * as colors from "https://deno.land/std/fmt/colors.ts";
 
 // Export enum first
 export enum CommitFormat {
@@ -759,7 +759,7 @@ async function searchAndSelectIssue(): Promise<{ number: number, title: string }
     }
 
     console.log(`\n${COLORS.header("Found issues:")}`);
-    console.log('┌──────┬────────┬──────────────────────────────────────────────────────────┐');
+    console.log('┌──────┬────��───┬──────────────────────────────────────────────────────────┐');
     console.log('│ Sel# │ ID     │ Title                                                    │');
     console.log('├──────┼────────┼──────────────────────────────────────────────────────────┤');
 

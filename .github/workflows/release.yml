@@ -23,7 +23,7 @@ jobs:
         run: |
           rm -f deno.lock
           deno cache main.ts
-          deno task build
+          deno run --allow-read --allow-write --allow-run="git,vim,gh,deno" scripts/build.ts
         
       - name: Generate Release Notes
         uses: actions/github-script@v7

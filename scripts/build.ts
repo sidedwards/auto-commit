@@ -1,4 +1,4 @@
-#!/usr/bin/env -S deno run --allow-read --allow-write --allow-run
+#!/usr/bin/env -S deno run --allow-read --allow-write --allow-run="git,vim,gh,deno"
 
 import { ensureDir } from "https://deno.land/std/fs/ensure_dir.ts";
 import { join } from "https://deno.land/std/path/mod.ts";
@@ -46,7 +46,7 @@ async function build() {
                 "--allow-read",
                 "--allow-write",
                 "--allow-env",
-                "--allow-run=git,vim",
+                "--allow-run=git,vim,gh", // Added gh for GitHub CLI
                 "--target",
                 target.target,
                 "--output",
@@ -60,7 +60,7 @@ async function build() {
         const result = await command.output();
         if (!result.success) {
             console.error(`Failed to build for ${target.platform}`);
-            continue;
+            Deno.exit(1); // Exit with error if any build fails
         }
     }
 

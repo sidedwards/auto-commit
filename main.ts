@@ -14,6 +14,7 @@ export enum CommitFormat {
     KERNEL = 'kernel',
     REPO = 'repo',
     CUSTOM = 'custom',
+    ISSUE_REFERENCE = 'issue',  // Add new format
 }
 
 // Then define all other functions and constants
@@ -25,6 +26,7 @@ const COLORS = {
     dim: colors.dim,
     bold: colors.bold,
     header: (s: string) => colors.bold(colors.cyan(s)),
+    action: (s: string) => colors.bold(colors.yellow(s)),
 };
 
 // Update startLoading with chalk
@@ -87,8 +89,13 @@ const CONVENTIONAL_FORMAT = `1. Follow the format:
 5. Mark breaking changes as:
    BREAKING CHANGE: <description>
 
+6. If a referenced issue ID is available, replace <scope> with <ISSUE_ID> and include it as:
+    <type>(#<ISSUE_ID>): <subject>
+7. If no referenced issue ID is available add a scope based on the changes and format like:
+    <type>(<scope>): <subject>
+
 RESPONSE FORMAT:
-<type>(<scope>): <subject> (only one per commit)
+<type>(<scope> or #<ISSUE_ID>): <subject> (only include once per commit)
 
 - Main change description
   * Impact or detail
@@ -116,16 +123,19 @@ const SEMANTIC_FORMAT = `1. Follow the format:
     1. Start with an emoji
     2. Use present tense
     3. First line is summary
-    4. Include issue references
+    4. If a referenced issue ID is available, add a new line at the end:
+        Reference: #<ISSUE_ID>
+    5. If no issue ID is available, do not include the Reference line
     
 RESPONSE FORMAT:
 :emoji: <subject>
 
-<description>
+<short description>
 - Change detail 1
 - Change detail 2
+- ...
 
-<issue reference (only if in diff)>`;
+Reference: #<ISSUE_ID> (if available)`;
 
 const ANGULAR_FORMAT = `1. Follow Angular's commit format:
     Types:
@@ -144,10 +154,13 @@ const ANGULAR_FORMAT = `1. Follow Angular's commit format:
     2. No period at end
     3. Optional body with details
     4. Breaking changes marked
-    5. Only include a single <type>(<scope>): <subject> line maximum
+    5. If a referenced issue ID is available, replace <scope> with <ISSUE_ID> and include it as:
+        <type>(#<ISSUE_ID>): <subject>
+    6. If no referenced issue ID is available add a scope based on the changes and format like:
+        <type>(<scope>): <subject>
     
 RESPONSE FORMAT:
-<type>(<scope>): <subject> (only one per commit)
+<type>(<scope> or #<ISSUE_ID>): <subject> (only one per commit)
 
 * Change detail 1
 * Change detail 2
@@ -161,7 +174,10 @@ const KERNEL_FORMAT = `1. Follow Linux kernel format:
     3. Description should be clear and concise
     4. Body explains the changes in detail
     5. Wrap all lines at 72 characters
-    6. End with Signed-off-by line
+    6. End with Signed-off-by line using git author info
+    7. Never include the diff or any git output
+    8. If a referenced issue ID is available, add a new line above the Signed-off-by line for Reference with the issue ID like:
+        Reference: #<ISSUE_ID>
     
 RESPONSE FORMAT:
 <subsystem>: <brief description>
@@ -169,9 +185,26 @@ RESPONSE FORMAT:
 <detailed explanation of what changed and why>
 <continue explanation, wrapped at 72 characters>
 
-Signed-off-by: <author> <email>
+Signed-off-by: {{GIT_AUTHOR}}
 
-IMPORTANT: Replace all placeholders with real values from the diff.`;
+Reference: #<ISSUE_ID> (if available)`;
+
+const ISSUE_FORMAT = `1. Follow the issue reference format:
+    Rules:
+    1. First line must be "[#ISSUE_ID_IF_ANY]: brief description"
+    2. If no issue is found, just include the brief description
+    3. Description should be clear and concise
+    4. Use present tense, imperative mood
+    5. Reference only issues mentioned in the diff
+    6. DO NOT make up an issue ID
+    
+RESPONSE FORMAT:
+[#ISSUE_ID_IF_ANY]: brief description
+
+- Main implementation details
+- Additional changes
+- Impact or considerations
+`;
 
 // Add new function to get commit history for analysis
 async function getCommitHistory(author?: string, limit = 50): Promise<string> {
@@ -237,18 +270,146 @@ ${commits}`
     }
 }
 
-// Update getCommitMessage function signature to remove test client
+// Add function to get related issues
+async function getRelatedIssues(diff: string): Promise<Array<{number: number, title: string}>> {
+    try {
+        // Extract potential issue numbers from diff
+        const issueRefs = diff.match(/#\d+/g) || [];
+        const uniqueIssues = [...new Set(issueRefs.map(ref => ref.slice(1)))];
+
+        let issues = [];
+
+        if (uniqueIssues.length > 0) {
+            // Verify existence of issues using GitHub CLI
+            const command = new Deno.Command("gh", {
+                args: ["issue", "list", 
+                      "--json", "number,title",
+                      "--limit", "100",
+                      "-R", ".", // current repo
+                      ...uniqueIssues.map(issue => `#${issue}`)],
+                stdout: "piped",
+                stderr: "piped",
+            });
+
+            const output = await command.output();
+            if (!output.success) {
+                throw new Error(`Failed to fetch issues: ${new TextDecoder().decode(output.stderr)}`);
+            }
+
+            issues = JSON.parse(new TextDecoder().decode(output.stdout));
+        }
+
+        // If no direct issue references, search for issues using keywords
+        if (issues.length === 0) {
+            const keywords = extractKeywordsFromDiff(diff);
+            if (keywords.length > 0) {
+                const searchCommand = new Deno.Command("gh", {
+                    args: ["issue", "search", 
+                          "--json", "number,title",
+                          "--limit", "5",
+                          "-R", ".", // current repo
+                          ...keywords],
+                    stdout: "piped",
+                    stderr: "piped",
+                });
+
+                const searchOutput = await searchCommand.output();
+                if (!searchOutput.success) {
+                    throw new Error(`Failed to fetch issues: ${new TextDecoder().decode(searchOutput.stderr)}`);
+                }
+
+                issues = JSON.parse(new TextDecoder().decode(searchOutput.stdout));
+            }
+        }
+
+        return issues;
+    } catch {
+        return [];
+    }
+}
+
+function extractKeywordsFromDiff(diff: string): string[] {
+    // Define a set of common words to ignore
+    const commonWords = new Set([
+        'the', 'and', 'for', 'with', 'this', 'that', 'from', 'are', 'was', 'were', 
+        'will', 'would', 'could', 'should', 'have', 'has', 'had', 'not', 'but', 
+        'or', 'if', 'then', 'else', 'when', 'while', 'do', 'does', 'did', 'done',
+        'in', 'on', 'at', 'by', 'to', 'of', 'a', 'an', 'is', 'it', 'as', 'be', 
+        'can', 'may', 'might', 'must', 'shall', 'which', 'who', 'whom', 'whose',
+        'what', 'where', 'why', 'how', 'all', 'any', 'some', 'no', 'none', 'one',
+        'two', 'three', 'four', 'five', 'six', 'seven', 'eight', 'nine', 'ten'
+    ]);
+
+    // Use a regular expression to extract words and identifiers
+    const words = diff.match(/\b\w+\b/g) || [];
+
+    // Filter out common words and return unique keywords
+    const keywords = words
+        .filter(word => !commonWords.has(word.toLowerCase()))
+        .map(word => word.toLowerCase());
+
+    return [...new Set(keywords)];
+}
+
+// Add new function to get git author info
+async function getGitAuthor(): Promise<{ name: string, email: string }> {
+    const nameCmd = new Deno.Command("git", {
+        args: ["config", "user.name"],
+        stdout: "piped",
+    });
+    const emailCmd = new Deno.Command("git", {
+        args: ["config", "user.email"],
+        stdout: "piped",
+    });
+
+    const [nameOutput, emailOutput] = await Promise.all([
+        nameCmd.output(),
+        emailCmd.output(),
+    ]);
+
+    return {
+        name: new TextDecoder().decode(nameOutput.stdout).trim(),
+        email: new TextDecoder().decode(emailOutput.stdout).trim()
+    };
+}
+
+// Update getCommitMessage to include author info for kernel format
 async function getCommitMessage(
     diff: string, 
     apiKey: string,
     systemPrompt?: string,
+    selectedIssue?: { number: number, title: string } | null,
+    selectedFormat?: CommitFormat
 ): Promise<string> {
+    if (selectedFormat === CommitFormat.KERNEL) {
+        const author = await getGitAuthor();
+        systemPrompt = `${systemPrompt}\n\nGit Author: ${author.name} <${author.email}>`;
+    }
     const loadingId = startLoading('Generating commit message...');
-            
+    
     try {
+        // Get related issues first
+        const relatedIssues = await getRelatedIssues(diff);
+        
+        // Add issue context to system prompt if available
+        if (selectedIssue) {
+            systemPrompt += `\n\nReferenced issue: #${selectedIssue.number}: ${selectedIssue.title}
+Include the issue ID as a reference according to the commit message format.`;
+        } else {
+            systemPrompt += `\n\nNo issue referenced`;
+        }
+        
+        if (relatedIssues.length > 0) {
+            systemPrompt += `\n\nRelated issues:\n${
+                relatedIssues.map(issue => `#${issue.number}: ${issue.title}`).join('\n')
+            }`;
+        }
+        
         const anthropic = new Anthropic({
             apiKey: apiKey,
         });
+
+        // console.log(systemPrompt);
 
         const msg = await anthropic.messages.create({
             model: "claude-3-haiku-20240307",
@@ -257,16 +418,17 @@ async function getCommitMessage(
             system: systemPrompt,
             messages: [{ 
                 role: "user", 
-                content: `Generate a commit message for these changes:\n\n${diff}\n\nIMPORTANT: 
-1. Generate ONLY the commit message
-2. Do not include any explanatory text or formatting
+                content: `Generate a commit message summarizing all key changes from the diff:\n\n${diff}\n\nIMPORTANT: 
+1. Do not include any explanatory text or formatting
+2. Do not make up features, changes, or issue numbers not present in the diff
 3. Do not repeat the header line
-4. Follow this exact structure:
+4. IMPORTANT: NEVER include the diff in the response
+5. Do not include "diff --git" or any git output
+6. Follow this exact structure:
    - One header line
    - One blank line
-   - Bullet points for changes
-   - Breaking changes (if any)
-5. Never include the diff or any git output`
+   - Bullet points for actual changes
+   - Breaking changes (if any)`
             }],
         });
 
@@ -293,21 +455,9 @@ async function getCommitMessage(
                 bodyLines.push(line);
             }
         }
-
-        // Combine with proper spacing
-        const parts = [
-            headerLine,
-            '',  // Blank line after header
-            ...bodyLines
-        ];
-
-        // Add breaking changes with blank line before them if they exist
-        if (breakingChanges.length > 0) {
-            parts.push('');  // Extra blank line before breaking changes
-            parts.push(...breakingChanges);
-        }
-
-        return parts.join('\n');
+        
+        // Return the formatted commit message
+        return `${headerLine}\n\n${bodyLines.join('\n')}\n\n${breakingChanges.join('\n')}`;
     } finally {
         stopLoading(loadingId);
     }
@@ -413,7 +563,7 @@ async function listAuthors(): Promise<void> {
     console.log("\nRepository Authors:");
     console.log('┌────────┬──────────────────────────────────────────────────────────────┐');
     console.log('│ Commits│ Author                                                       │');
-    console.log('├────────┼──────────────────────────────────────────────────────────────┤');
+    console.log('├────────┼───────────────────────────────────────────────────────────────');
     
     authors.forEach(({ count, author }) => {
         const countStr = count.toString().padStart(6);
@@ -475,18 +625,19 @@ async function getDefaultFormat(): Promise<CommitFormat | null> {
 function createFileTree(files: string[]): string[] {
     const tree: string[] = [];
     const sortedFiles = files.sort();
+    const maxWidth = 68; // Width of box content
     
     for (const file of sortedFiles) {
         const parts = file.split('/');
-        let prefix = '';
         
         if (parts.length === 1) {
-            tree.push(`${COLORS.dim('├──')} ${COLORS.info(file)}`);
+            const line = `${COLORS.dim('├──')} ${COLORS.info(file)}`;
+            tree.push(line.padEnd(maxWidth));
         } else {
             const fileName = parts.pop()!;
-            const dir = parts.join('/');
-            prefix = COLORS.dim('│   ').repeat(parts.length - 1);
-            tree.push(`${prefix}${COLORS.dim('├──')} ${COLORS.info(fileName)}`);
+            const prefix = COLORS.dim('│   ').repeat(parts.length - 1);
+            const line = `${prefix}${COLORS.dim('├──')} ${COLORS.info(fileName)}`;
+            tree.push(line.padEnd(maxWidth));
         }
     }
     
@@ -527,9 +678,162 @@ async function getFormatTemplate(format: CommitFormat, author?: string): Promise
         case CommitFormat.REPO:
         case CommitFormat.CUSTOM:
             return await getStoredCommitStyle() || CONVENTIONAL_FORMAT;
+        case CommitFormat.ISSUE_REFERENCE:
+            return ISSUE_FORMAT;
         default:
             return CONVENTIONAL_FORMAT;
     }
+}
+
+async function getRepoInfo(): Promise<string | null> {
+    const command = new Deno.Command("git", {
+        args: ["remote", "get-url", "origin"],
+        stdout: "piped",
+        stderr: "piped",
+    });
+
+    const output = await command.output();
+    if (!output.success) {
+        console.error(`Failed to get remote URL: ${new TextDecoder().decode(output.stderr)}`);
+        return null;
+    }
+
+    const url = new TextDecoder().decode(output.stdout).trim();
+    const match = url.match(/[:/]([^/]+\/[^/.]+)(\.git)?$/);
+    return match ? match[1] : null;
+}
+
+async function isGitHubRepo(): Promise<boolean> {
+    const command = new Deno.Command("git", {
+        args: ["remote", "get-url", "origin"],
+        stdout: "piped",
+        stderr: "piped",
+    });
+
+    try {
+        const output = await command.output();
+        if (!output.success) return false;
+
+        const url = new TextDecoder().decode(output.stdout).trim();
+        return url.includes('github.com');
+    } catch {
+        return false;
+    }
+}
+
+async function searchAndSelectIssue(): Promise<{ number: number, title: string } | null> {
+    const repo = await getRepoInfo();
+    if (!repo) {
+        console.error("Could not determine the repository information.");
+        return null;
+    }
+
+    const isGitHub = await isGitHubRepo();
+    if (!isGitHub) {
+        return null;
+    }
+
+    const keywords = prompt("Enter keywords to search for issues (or press Enter to skip): ");
+    if (!keywords) return null;
+
+    const searchCommand = new Deno.Command("gh", {
+        args: ["issue", "list", 
+              "--search", keywords,
+              "--json", "number,title",
+              "--limit", "5",
+              "-R", repo], // Use the dynamically determined repo
+        stdout: "piped",
+        stderr: "piped",
+    });
+
+    const searchOutput = await searchCommand.output();
+    if (!searchOutput.success) {
+        console.error(`Failed to search issues: ${new TextDecoder().decode(searchOutput.stderr)}`);
+        return null;
+    }
+
+    const issues = JSON.parse(new TextDecoder().decode(searchOutput.stdout));
+    if (issues.length === 0) {
+        console.log("No issues found.");
+        return null;
+    }
+
+    console.log(`\n${COLORS.header("Found issues:")}`);
+    console.log('┌──────┬────────┬───────────────────────��──────────────────────────────────┐');
+    console.log('│ Sel# │ ID     │ Title                                                    │');
+    console.log('├──────┼────────┼──────────────────────────────────────────────────────────┤');
+
+    interface Issue {
+        number: number;
+        title: string;
+    }
+
+    issues.forEach((issue: Issue, index: number) => {
+        console.log(
+            `│  ${(index + 1).toString().padEnd(3)} │ ` +
+            `#${issue.number.toString().padEnd(5)} │ ` +
+            `${issue.title.slice(0, 50).padEnd(50)} │`
+        );
+    });
+    console.log('└──────┴────────┴──────────────────────────────────────────────────────────┘\n');
+
+    const choice = prompt("Select an issue by number (or press Enter to skip): ");
+    const selectedIndex = parseInt(choice || "", 10) - 1;
+    if (selectedIndex >= 0 && selectedIndex < issues.length) {
+        return issues[selectedIndex];
+    }
+
+    return null;
+}
+
+// Add formatting helper functions
+function createBox(content: string): string {
+    const maxWidth = 70;
+    const contentWidth = maxWidth - 2; // Account for borders
+    const horizontal = '─'.repeat(maxWidth);
+    
+    // Helper to wrap text
+    function wrapText(text: string): string[] {
+        const words = text.split(' ');
+        const lines: string[] = [];
+        let currentLine = '';
+        
+        words.forEach(word => {
+            if ((currentLine + ' ' + word).length <= contentWidth) {
+                currentLine += (currentLine ? ' ' : '') + word;
+            } else {
+                if (currentLine) lines.push(currentLine);
+                currentLine = word;
+            }
+        });
+        if (currentLine) lines.push(currentLine);
+        return lines;
+    }
+    
+    // Process all lines and wrap them
+    const wrappedLines = content.split('\n').flatMap(line => wrapText(line));
+    
+    let result = `┌${horizontal}┐\n`;
+    wrappedLines.forEach(line => {
+        result += `│${line.padEnd(maxWidth - 2)}│\n`;
+    });
+    result += `└${horizontal}┘`;
+    
+    return result;
+}
+
+async function commitChanges(message: string): Promise<void> {
+    const command = new Deno.Command("git", {
+        args: ["commit", "-m", message],
+        stdout: "piped",
+        stderr: "piped",
+    });
+
+    const output = await command.output();
+    if (!output.success) {
+        throw new Error(`Failed to commit: ${new TextDecoder().decode(output.stderr)}`);
+    }
+    console.log("\n✓ Changes committed successfully!");
 }
 
 // Update main function to use stored styles
@@ -540,7 +844,15 @@ async function main(): Promise<void> {
         alias: { h: "help" },
     });
 
-    let selectedFormat = await getDefaultFormat() || CommitFormat.CONVENTIONAL;
+    // Update format selection logic
+    let selectedFormat = flags.format 
+        ? (Object.values(CommitFormat).find(f => f.startsWith(flags.format?.toLowerCase() || '')) || CommitFormat.CONVENTIONAL)
+        : (await getDefaultFormat() || CommitFormat.CONVENTIONAL);
+
+    // Store the selected format
+    if (flags.format) {
+        await storeDefaultFormat(selectedFormat);
+    }
 
     // Handle --help flag
     if (flags.help) {
@@ -656,33 +968,21 @@ For more information, visit: https://github.com/sidedwards/auto-commit
             selectedFormat = CommitFormat.SEMANTIC;
         } else if (formatInput.includes('ang')) {
             selectedFormat = CommitFormat.ANGULAR;
+        } else if (formatInput.includes('con')) {
+            selectedFormat = CommitFormat.CONVENTIONAL;
+        } else if (formatInput.includes('iss')) {
+            selectedFormat = CommitFormat.ISSUE_REFERENCE;
         }
 
         const template = 
             selectedFormat === CommitFormat.KERNEL ? KERNEL_FORMAT :
             selectedFormat === CommitFormat.SEMANTIC ? SEMANTIC_FORMAT :
             selectedFormat === CommitFormat.ANGULAR ? ANGULAR_FORMAT :
+            selectedFormat === CommitFormat.ISSUE_REFERENCE ? ISSUE_FORMAT :
             CONVENTIONAL_FORMAT;
             
         await storeCommitStyle(template);
         await storeDefaultFormat(selectedFormat);
-    }
-
-    // Use format flag if provided
-    if (typeof flags.format === 'string') {  // Type check the flag
-        const formatInput = flags.format.toLowerCase();
-        // Handle common typos and variations
-        if (formatInput.includes('kern')) {
-            selectedFormat = CommitFormat.KERNEL;
-        } else if (formatInput.includes('sem')) {
-            selectedFormat = CommitFormat.SEMANTIC;
-        } else if (formatInput.includes('ang')) {
-            selectedFormat = CommitFormat.ANGULAR;
-        } else if (formatInput.includes('con')) {
-            selectedFormat = CommitFormat.CONVENTIONAL;
-        }
-    } else {
-        selectedFormat = await getDefaultFormat() || CommitFormat.CONVENTIONAL;
     }
 
     if (flags.learn) {
@@ -716,7 +1016,8 @@ For more information, visit: https://github.com/sidedwards/auto-commit
             '1': CommitFormat.CONVENTIONAL,
             '2': CommitFormat.SEMANTIC,
             '3': CommitFormat.ANGULAR,
-            '4': CommitFormat.KERNEL
+            '4': CommitFormat.KERNEL,
+            '5': CommitFormat.ISSUE_REFERENCE
         };
 
         console.log("\nChoose default commit format:");
@@ -724,8 +1025,9 @@ For more information, visit: https://github.com/sidedwards/auto-commit
         console.log("2. Semantic (with emojis)");
         console.log("3. Angular");
         console.log("4. Linux Kernel");
+        console.log("5. Issue Reference ([#123]: description)");
 
-        const formatChoice = prompt("Select format (1-4): ") || "1";
+        const formatChoice = prompt("Select format (1-5): ") || "1";
         selectedFormat = formatChoices[formatChoice as keyof typeof formatChoices] || CommitFormat.CONVENTIONAL;
         
         // Store the choice
@@ -735,157 +1037,57 @@ For more information, visit: https://github.com/sidedwards/auto-commit
     }
 
     try {
-        // Get staged files first
-        const stagedFiles = await getStagedFiles();
+        // Move selectedIssue outside the try block so it persists across retries
+        const selectedIssue = await searchAndSelectIssue();
         
-        if (stagedFiles.length === 0) {
-            console.log("\n" + COLORS.warning("⚠") + " No staged changes found. Add files first with:");
-            console.log("\n  " + COLORS.dim("git add <files>"));
-            console.log("\n  " + COLORS.dim("git add -p"));
-            return;
-        }
+        while (true) { // Add loop for retries
+            const diff = await getDiff();
+            const apiKey = await getStoredApiKey();
+            const systemPrompt = await getFormatTemplate(selectedFormat);
 
-        // Show files that will be committed
-        console.log("\n" + COLORS.header("Staged files to be committed:"));
-        console.log(COLORS.dim('┌' + '─'.repeat(72) + '┐'));
-        createFileTree(stagedFiles).forEach(line => {
-            console.log(COLORS.dim('│ ') + line.padEnd(70) + COLORS.dim(' │'));
-        });
-        console.log(COLORS.dim('└' + '─'.repeat(72) + '┘\n'));
+            if (!apiKey) {
+                throw new Error("API key is required");
+            }
+            const commitMessage = await getCommitMessage(diff, apiKey, systemPrompt, selectedIssue, selectedFormat);
 
-        // Confirm before proceeding
-        const proceed = prompt("Generate commit message for these files? (y/n) ");
-        if (proceed?.toLowerCase() !== 'y') {
-            console.log("\n" + COLORS.error("✗") + " Operation cancelled.");
-            return;
-        }
+            // Show staged files first with bold header
+            console.log(`\n${COLORS.header("Staged files to be committed:")}`);
+            const stagedFiles = await getStagedFiles();
+            console.log(createBox(createFileTree(stagedFiles).join('\n')));
 
-        // Get the diff and generate message
-        try {
-            const diff = await checkStagedChanges();
-            // Get the appropriate format template
-            const formatTemplate = await getFormatTemplate(selectedFormat, flags.author);
-    
-            // Create the system prompt
-            const systemPrompt = `You are a Git Commit Message Generator. Generate ONLY a commit message following this format:
+            const proceed = prompt("\nGenerate commit message for these files? (y/n) ");
+            if (proceed?.toLowerCase() !== 'y') {
+                return;
+            }
 
-${formatTemplate}
+            displayCommitMessage(commitMessage);
 
-IMPORTANT: 
-1. Base your message on ALL changes in the diff
-2. Consider ALL files being modified (${stagedFiles.join(', ')})
-3. Do not focus only on the first file
-4. Summarize the overall changes across all files
-5. Include significant changes from each modified file
-6. Do not make assumptions or add fictional features
-7. Never include issue numbers unless they appear in the diff
-8. Do not include any format templates or placeholders
-9. Never output the response format template itself
-10. Only include ONE header line
-11. Never duplicate any lines, especially the header
-12. Sort changes by priority and logical groups
-13. Never include preamble or explanation
-14. Never include the diff or any git-specific output
-15. Structure should be:
-    - Single header line
-    - Blank line
-    - Body with bullet points
-    - Breaking changes (if any)`;
-    
-            const commitMessage = await getCommitMessage(
-                diff, 
-                apiKey, 
-                systemPrompt
-            );
-
-            console.log("\n" + COLORS.header("Proposed commit:") + "\n");
-            console.log(COLORS.dim('┌' + '─'.repeat(72) + '┐'));
-            console.log(commitMessage.split('\n').map(line => {
-                // If line is longer than 70 chars, wrap it
-                if (line.length > 70) {
-                    const words = line.split(' ');
-                    let currentLine = '';
-                    const wrappedLines = [];
-                    
-                    words.forEach(word => {
-                        if ((currentLine + ' ' + word).length <= 70) {
-                            currentLine += (currentLine ? ' ' : '') + word;
-                        } else {
-                            wrappedLines.push(`│ ${currentLine.padEnd(70)} │`);
-                            currentLine = word;
-                        }
-                    });
-                    if (currentLine) {
-                        wrappedLines.push(`│ ${currentLine.padEnd(70)} │`);
-                    }
-                    return wrappedLines.join('\n');
-                }
-                // If line is <= 70 chars, pad it as before
-                return `│ ${line.padEnd(70)} │`;
-            }).join('\n'));
-            console.log(COLORS.dim('└' + '─'.repeat(72) + '┘\n'));
-
-            const choice = prompt("(a)ccept, (e)dit, (r)eject, (n)ew message? ");
-
+            // Format action keys in bold
+            const choice = prompt(`\n${COLORS.action("(a)")}ccept, ${COLORS.action("(e)")}dit, ${COLORS.action("(r)")}eject, ${COLORS.action("(n)")}ew message? `);
+            
             switch (choice?.toLowerCase()) {
-                case 'a': {
-                    // Implement actual git commit here
-                    const commitCommand = new Deno.Command("git", {
-                        args: ["commit", "-m", commitMessage],
-                        stdout: "piped",
-                        stderr: "piped",
-                    });
-                    
-                    const commitResult = await commitCommand.output();
-                    if (!commitResult.success) {
-                        throw new Error(`Failed to commit: ${new TextDecoder().decode(commitResult.stderr)}`);
-                    }
-                    console.log("\n" + COLORS.success("✓") + " Changes committed!");
-                    break;
-                }
+                case 'a':
+                    await commitChanges(commitMessage);
+                    return;
                 case 'e': {
                     const editedMessage = await editInEditor(commitMessage);
-                    if (editedMessage !== commitMessage) {
-                        console.log("\nEdited commit:\n");
-                        console.log('┌' + '─'.repeat(72) + '┐');
-                        console.log(editedMessage.split('\n').map(line => `│ ${line.padEnd(70)} │`).join('\n'));
-                        console.log('└' + '─'.repeat(72) + '┘\n');
-                        
-                        // Implement git commit with edited message
-                        const editedCommitCommand = new Deno.Command("git", {
-                            args: ["commit", "-m", editedMessage],
-                            stdout: "piped",
-                            stderr: "piped",
-                        });
-                        
-                        const editedCommitResult = await editedCommitCommand.output();
-                        if (!editedCommitResult.success) {
-                            throw new Error(`Failed to commit: ${new TextDecoder().decode(editedCommitResult.stderr)}`);
-                        }
-                        console.log("\n" + COLORS.success("✓") + " Changes committed with edited message!");
+                    if (editedMessage) {
+                        await commitChanges(editedMessage);
                     }
-                    break;
+                    return;
                 }
                 case 'n':
-                    // Generate a new message with slightly different temperature
-                    return await main(); // Restart the process
+                    continue; // Continue the loop instead of calling main() recursively
                 case 'r':
-                    console.log("\n" + COLORS.error("✗") + " Commit message rejected.");
-                    break;
+                    console.log("\n✗ Commit message rejected.");
+                    return;
                 default:
-                    console.log("\n⚠ Invalid selection.");
+                    console.log("\n✗ Invalid choice. Commit cancelled.");
+                    return;
             }
-        } catch (error) {
-            console.error("Failed to generate commit message:", error);
-            return;
         }
     } catch (error) {
-        if (error instanceof Error) {
-            console.error(COLORS.error("Error:") + " An error occurred:", error.message);
-        } else {
-            console.error(COLORS.error("Error:") + " An unexpected error occurred");
-        }
-        return;
+        console.error("An error occurred:", error);
     }
 }
 
@@ -918,3 +1120,28 @@ async function storeApiKey(apiKey: string): Promise<void> {
 if (import.meta.main) {
     main();
 }
+
+async function getDiff(): Promise<string> {
+    const command = new Deno.Command("git", {
+        args: ["diff", "--staged"],
+        stdout: "piped",
+        stderr: "piped",
+    });
+
+    const output = await command.output();
+    if (!output.success) {
+        const errorMessage = new TextDecoder().decode(output.stderr);
+        throw new Error(`Failed to get diff: ${errorMessage}`);
+    }
+
+    return new TextDecoder().decode(output.stdout);
+}
+
+// Replace createBox with a simpler message display
+function displayCommitMessage(message: string): void {
+    console.log(COLORS.header("\nProposed commit:"));
+    console.log(COLORS.dim("─".repeat(80)));
+    console.log(message);
+    console.log(COLORS.dim("─".repeat(80)));
+}
+

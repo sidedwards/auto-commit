@@ -1,4 +1,4 @@
-#!/usr/bin/env -S deno run --allow-read --allow-write --allow-run
+#!/usr/bin/env -S deno run --allow-read --allow-write --allow-run="git,vim,gh,deno"
 
 import { join } from "https://deno.land/std/path/mod.ts";
 
@@ -28,7 +28,7 @@ async function install() {
             "--allow-read",
             "--allow-write",
             "--allow-env",
-            "--allow-run=git,vim",
+            "--allow-run=git,vim,gh",
             "--output",
             scriptPath,
             "main.ts"

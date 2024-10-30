@@ -1,13 +1,13 @@
 {
   "tasks": {
-    "start": "deno run --allow-net --allow-read --allow-write --allow-env --allow-run=\"git,vim,gh\" main.ts",
+    "start": "deno run --allow-net --allow-read --allow-write --allow-env --allow-run=\"git,vim,gh\" src/main.ts",
     "install": "deno run --allow-read --allow-write --allow-run=\"git,vim,gh\" scripts/install.ts",
     "build": "deno run --allow-read --allow-write --allow-run=\"git,vim,gh\" scripts/build.ts",
     "update": "git pull && deno task install"
   },
   "name": "auto-commit",
   "version": "1.0.0",
-  "exports": "./main.ts",
+  "exports": "./src/main.ts",
   "description": "Automatically generate git commit messages.",
   "author": "Sid Edwards",
   "license": "MIT"

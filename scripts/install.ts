@@ -31,7 +31,7 @@ async function install() {
             "--allow-run=git,vim,gh",
             "--output",
             scriptPath,
-            "main.ts"
+            "src/main.ts"
         ],
         stdout: "inherit",
         stderr: "inherit",

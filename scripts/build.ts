@@ -51,7 +51,7 @@ async function build() {
                 target.target,
                 "--output",
                 `dist/${filename}`,
-                "main.ts"
+                "src/main.ts"
             ],
             stdout: "inherit",
             stderr: "inherit",

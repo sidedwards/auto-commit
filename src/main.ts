@@ -73,8 +73,9 @@ async function main(): Promise<void> {
     // Handle format selection
     if (flags.learn) {
         try {
+            const systemPrompt = `You are an expert in git commit message styling and formatting.`;
             const commits = await getCommitHistory(flags.author);
-            const styleGuide = await analyzeCommitStyle(commits, apiKey);
+            const styleGuide = await analyzeCommitStyle(systemPrompt, commits, apiKey);
             
             if (flags.author) {
                 await storeCommitStyle(styleGuide, flags.author);

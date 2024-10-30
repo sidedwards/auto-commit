@@ -22,7 +22,7 @@ jobs:
       - name: Build Executables
         run: |
           rm -f deno.lock
-          deno cache main.ts
+          deno cache src/main.ts
           deno run --allow-read --allow-write --allow-run="git,vim,gh,deno" scripts/build.ts
         
       - name: Generate Release Notes

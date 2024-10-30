@@ -1,6 +1,6 @@
 import { AnthropicClient } from "./anthropicClient.ts";
 
-export async function analyzeCommitStyle(commits: string, apiKey: string): Promise<string> {
+export async function analyzeCommitStyle(systemPrompt: string = `You are an expert in git commit message styling and formatting.`, commits: string, apiKey: string): Promise<string> {
     const client = new AnthropicClient(apiKey);
     const content = `Extract commit message rules from these commits. Create a minimal style guide that:
 
@@ -16,5 +16,5 @@ Analyze these commits:
 
 ${commits}`;
 
-    return await client.createMessage(content);
+    return await client.createMessage(systemPrompt, content);
 }

@@ -7,13 +7,14 @@ export class AnthropicClient {
         this.apiKey = apiKey;
     }
 
-    async createMessage(content: string, model: string = "claude-3-haiku-20240307"): Promise<string> {
+    async createMessage(systemPrompt: string, content: string, model: string = "claude-3-haiku-20240307"): Promise<string> {
         const anthropic = new Anthropic({ apiKey: this.apiKey });
 
         const msg = await anthropic.messages.create({
             model,
             max_tokens: 1024,
             temperature: 0,
+            system: systemPrompt,
             messages: [{ role: "user", content }],
         });
 

@@ -74,7 +74,7 @@ export async function searchAndSelectIssue(): Promise<{ number: number, title: s
     }
 
     console.log(`\n${COLORS.header("Found issues:")}`);
-    console.log('┌──────┬────��───┬──────────────────────────────────────────────────────────┐');
+    console.log('┌──────┬────────┬──────────────────────────────────────────────────────────┐');
     console.log('│ Sel# │ ID     │ Title                                                    │');
     console.log('├──────┼────────┼──────────────────────────────────────────────────────────┤');
 

@@ -38,17 +38,18 @@ Include the issue ID as a reference according to the commit message format.`;
         const client = new AnthropicClient(apiKey);
 
         const content = await client.createMessage(
+            systemPrompt || `You are an expert in git commit message styling and formatting.`,
             `Generate a commit message summarizing ALL key changes from the ENTIRE diff:\n\n${diff}\n\nIMPORTANT: 
 1. Do not include any explanatory text or formatting
-2. Do not make up features, changes, or issue numbers not present in the diff
-3. Do not repeat the header line
-4. IMPORTANT: NEVER include the diff in the response
-5. Do not include "diff --git" or any git output
-6. Follow this exact structure:
+2. Do not repeat the header line
+3. IMPORTANT: NEVER include the diff in the response
+4. Do not include "diff --git" or any git output
+5. Follow this exact structure:
    - One header line
    - One blank line
    - Bullet points for actual changes
-   - Breaking changes (if any)`);
+   - Breaking changes (if any)
+6. Do not make up features, changes, or issue numbers not present in the diff`);
 
         // Post-process the message to ensure proper formatting
         const lines = content.split('\n').filter(line => line.trim() !== '');

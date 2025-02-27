@@ -1,4 +1,4 @@
-import { parse } from "std/flags/mod.ts";
+import { parse } from "https://deno.land/std@0.220.0/flags/mod.ts";
 import { listAuthors as gitListAuthors } from "../git/gitOps.ts";
 import { COLORS } from "../utils.ts";
 import { LLMProvider, COMMON_MODELS } from "../ai/langChainClient.ts";

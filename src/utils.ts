@@ -1,4 +1,4 @@
-import * as colors from "std/fmt/colors.ts";
+import * as colors from "https://deno.land/std@0.220.1/fmt/colors.ts";
 
 export const COLORS = {
     success: colors.green,

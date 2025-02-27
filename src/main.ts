@@ -1,6 +1,6 @@
 #!/usr/bin/env -S deno run --allow-net --allow-read --allow-write --allow-env --allow-run="git,vim,gh" --import-map=import_map.json
 
-import { join } from "path";
+import { join } from "https://deno.land/std@0.220.1/path/mod.ts";
 import { parseFlags, displayHelp, displayAvailableModels } from "./cli/cli.ts";
 import { 
     getConfigDir, 

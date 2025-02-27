@@ -2,7 +2,7 @@
 
 Automatically generate git commit messages using Claude 3 Haiku. This tool analyzes your staged changes and creates clear, concise commit messages. It uses the Conventional Commit format by default but can adapt to repository-specific or author-specific styles.
 
-![output](https://github.com/user-attachments/assets/be56cd5e-d605-41d2-a711-3bb43f398ac7)
+![auto-commit-demo](https://github.com/user-attachments/assets/5ae52cd3-327a-4452-9674-a6eb2d3b29ce)
 
 ## Features
 

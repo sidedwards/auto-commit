@@ -1,0 +1,12 @@
+{
+  "imports": {
+    "@langchain/anthropic": "npm:@langchain/anthropic",
+    "@langchain/openai": "npm:@langchain/openai",
+    "@langchain/ollama": "npm:@langchain/ollama",
+    "@langchain/core/language_models/chat_models": "npm:@langchain/core/language_models/chat_models",
+    "std/": "https://deno.land/std@0.220.0/",
+    "std/fmt/": "https://deno.land/std@0.220.0/fmt/",
+    "std/flags/": "https://deno.land/std@0.220.0/flags/",
+    "path": "https://deno.land/std@0.220.0/path/mod.ts"
+  }
+} 

@@ -1,8 +1,20 @@
-#!/usr/bin/env -S deno run --allow-net --allow-read --allow-write --allow-env --allow-run="git,vim,gh"
+#!/usr/bin/env -S deno run --allow-net --allow-read --allow-write --allow-env --allow-run="git,vim,gh" --import-map=import_map.json
 
-import { join } from "https://deno.land/std/path/mod.ts";
-import { parseFlags, displayHelp } from "./cli/cli.ts";
-import { getConfigDir, getStoredApiKey, storeApiKey, storeDefaultFormat, getDefaultFormat } from "./config/config.ts";
+import { join } from "path";
+import { parseFlags, displayHelp, displayAvailableModels } from "./cli/cli.ts";
+import { 
+    getConfigDir, 
+    getStoredApiKey, 
+    storeApiKey, 
+    storeDefaultFormat, 
+    getDefaultFormat,
+    getStoredLLMProvider,
+    storeLLMProvider,
+    getModelForProvider,
+    storeModelForProvider,
+    getProviderConfig,
+    storeProviderConfig
+} from "./config/config.ts";
 import { getDiff, getCommitHistory, getStagedFiles, commitChanges, listAuthors } from "./git/gitOps.ts";
 import { COLORS, createBox, createFileTree, displayCommitMessage, editInEditor } from "./utils.ts";
 import {
@@ -19,6 +31,7 @@ import { getCommitMessage } from "./ai/getCommitMessage.ts";
 import { analyzeCommitStyle } from "./ai/commitStyleAnalyzer.ts";
 import { storeCommitStyle, getStoredCommitStyle } from "./formats/commitFormat.ts";
 import { searchAndSelectIssue } from "./gh/ghOps.ts";
+import { LLMProvider } from "./ai/langChainClient.ts";
 
 // Update main function to use stored styles
 async function main(): Promise<void> {
@@ -35,11 +48,81 @@ async function main(): Promise<void> {
         await listAuthors();
         return;
     }
-
-    let apiKey = await getStoredApiKey();
     
-    if (!apiKey) {
-        apiKey = prompt("Please enter your Anthropic API key: ");
+    // Handle --list-models flag
+    if (flags["list-models"]) {
+        // If provider is specified, only show models for that provider
+        const specifiedProvider = flags.provider ? 
+            flags.provider.toString().toLowerCase() as LLMProvider : 
+            undefined;
+            
+        if (specifiedProvider && !Object.values(LLMProvider).includes(specifiedProvider)) {
+            console.error(`Invalid provider: ${specifiedProvider}. Available providers: ${Object.values(LLMProvider).join(", ")}`);
+            return;
+        }
+        
+        displayAvailableModels(specifiedProvider);
+        return;
+    }
+
+    // Handle --show-defaults flag
+    if (flags["show-defaults"]) {
+        const defaultProvider = await getStoredLLMProvider() || LLMProvider.ANTHROPIC;
+        console.log(`Default provider: ${COLORS.info(defaultProvider)}`);
+        
+        // Show default models for each provider
+        for (const provider of Object.values(LLMProvider)) {
+            const defaultModel = await getModelForProvider(provider);
+            if (defaultModel) {
+                console.log(`Default model for ${COLORS.info(provider)}: ${COLORS.info(defaultModel)}`);
+            } else {
+                const fallbackModel = provider === LLMProvider.ANTHROPIC ? "claude-3-haiku-20240307" : 
+                                    provider === LLMProvider.OPENAI ? "gpt-3.5-turbo" : "llama3";
+                console.log(`Default model for ${COLORS.info(provider)}: ${COLORS.dim(fallbackModel)} (system default)`);
+            }
+        }
+        
+        // Show Ollama base URL if set
+        const ollamaBaseUrl = await getProviderConfig(LLMProvider.OLLAMA, "baseUrl");
+        if (ollamaBaseUrl) {
+            console.log(`Ollama base URL: ${COLORS.info(ollamaBaseUrl)}`);
+        }
+        
+        return;
+    }
+
+    // Handle LLM provider selection
+    let provider = flags.provider ? 
+        flags.provider.toString().toLowerCase() as LLMProvider : 
+        await getStoredLLMProvider() || LLMProvider.ANTHROPIC;
+
+    // Validate provider
+    if (!Object.values(LLMProvider).includes(provider)) {
+        console.error(`Invalid provider: ${provider}. Available providers: ${Object.values(LLMProvider).join(", ")}`);
+        console.log(`Run with --list-models to see available models for each provider.`);
+        return;
+    }
+
+    // Handle --set-default-provider flag
+    if (flags["set-default-provider"] && flags.provider) {
+        await storeLLMProvider(provider);
+        console.log(`Default provider set to: ${COLORS.info(provider)}`);
+        return;
+    }
+
+    // Handle --set-default-model flag (process this before API key prompts)
+    if (flags["set-default-model"] && flags.model) {
+        const specifiedModel = flags.model.toString();
+        await storeModelForProvider(provider, specifiedModel);
+        console.log(`Default model for ${COLORS.info(provider)} set to: ${COLORS.info(specifiedModel)}`);
+        return;
+    }
+
+    // Get API key for the selected provider
+    let apiKey = await getStoredApiKey(provider);
+    
+    if (!apiKey && provider !== LLMProvider.OLLAMA) {
+        apiKey = prompt(`Please enter your ${provider.toUpperCase()} API key: `);
         if (!apiKey) {
             console.error("API key is required");
             return;
@@ -47,8 +130,41 @@ async function main(): Promise<void> {
         
         const shouldStore = prompt("Would you like to store this API key for future use? (y/n): ");
         if (shouldStore?.toLowerCase() === 'y') {
-            await storeApiKey(apiKey);
+            await storeApiKey(apiKey, provider);
             console.log("API key stored successfully!");
+        }
+    }
+
+    // If provider is set by flags, store it as default (unless --set-default-provider was used)
+    if (flags.provider && !flags["set-default-provider"]) {
+        await storeLLMProvider(provider);
+    }
+
+    // Special handling for Ollama (local LLM)
+    if (provider === LLMProvider.OLLAMA) {
+        // Check if base URL is set
+        let baseUrl = await getProviderConfig(LLMProvider.OLLAMA, "baseUrl");
+        if (!baseUrl && !flags["base-url"]) {
+            baseUrl = prompt("Please enter Ollama base URL (default: http://localhost:11434): ") || "http://localhost:11434";
+            await storeProviderConfig(LLMProvider.OLLAMA, "baseUrl", baseUrl);
+        } else if (flags["base-url"]) {
+            const specifiedBaseUrl = flags["base-url"].toString();
+            await storeProviderConfig(LLMProvider.OLLAMA, "baseUrl", specifiedBaseUrl);
+        }
+    }
+
+    // Handle model selection for current provider
+    if (flags.model) {
+        const specifiedModel = flags.model.toString();
+        await storeModelForProvider(provider, specifiedModel);
+        
+        // Display the selected model
+        console.log(`Using model: ${COLORS.info(specifiedModel)} with provider: ${COLORS.info(provider)}`);
+    } else {
+        // Show currently selected model
+        const currentModel = await getModelForProvider(provider);
+        if (currentModel) {
+            console.log(`Using model: ${COLORS.info(currentModel)} with provider: ${COLORS.info(provider)}`);
         }
     }
 
@@ -67,18 +183,18 @@ async function main(): Promise<void> {
 
     // Update format selection logic
     let selectedFormat = flags.format 
-        ? (Object.values(CommitFormat).find(f => f.startsWith(flags.format?.toLowerCase() || '')) || CommitFormat.CONVENTIONAL)
+        ? (Object.values(CommitFormat).find(f => f.startsWith(flags.format.toString().toLowerCase())) || CommitFormat.CONVENTIONAL)
         : (await getDefaultFormat() || CommitFormat.CONVENTIONAL);
 
     // Handle format selection
     if (flags.learn) {
         try {
             const systemPrompt = `You are an expert in git commit message styling and formatting.`;
-            const commits = await getCommitHistory(flags.author);
-            const styleGuide = await analyzeCommitStyle(systemPrompt, commits, apiKey);
+            const commits = await getCommitHistory(flags.author ? flags.author.toString() : undefined);
+            const styleGuide = await analyzeCommitStyle(systemPrompt, commits, apiKey, provider);
             
             if (flags.author) {
-                await storeCommitStyle(styleGuide, flags.author);
+                await storeCommitStyle(styleGuide, flags.author.toString());
                 await storeCommitStyle(styleGuide);  // Also store as default
                 await storeDefaultFormat(CommitFormat.CUSTOM);
                 selectedFormat = CommitFormat.CUSTOM;
@@ -88,7 +204,7 @@ async function main(): Promise<void> {
                 selectedFormat = CommitFormat.REPO;
             }
             
-            console.log("\n" + getFormatDisplayName(selectedFormat, flags.author));
+            console.log("\n" + getFormatDisplayName(selectedFormat, flags.author ? flags.author.toString() : undefined));
         } catch (error) {
             console.error(COLORS.error("Error:") + " Failed to learn commit style:", error);
             console.log(COLORS.dim("Falling back to default commit style..."));
@@ -96,123 +212,102 @@ async function main(): Promise<void> {
         }
     } else if (flags.format) {
         // Explicit format specified - store both format and its template
-        const formatInput = flags.format.toLowerCase();
+        const formatInput = flags.format.toString().toLowerCase();
         
-        // Handle format selection as before
-        if (formatInput.includes('kern')) {
-            selectedFormat = CommitFormat.KERNEL;
-        } else if (formatInput.includes('sem')) {
-            selectedFormat = CommitFormat.SEMANTIC;
-        } else if (formatInput.includes('ang')) {
-            selectedFormat = CommitFormat.ANGULAR;
-        } else if (formatInput.includes('con')) {
-            selectedFormat = CommitFormat.CONVENTIONAL;
-        } else if (formatInput.includes('iss')) {
-            selectedFormat = CommitFormat.ISSUE_REFERENCE;
-        }
-
-        const template = 
-            selectedFormat === CommitFormat.KERNEL ? KERNEL_FORMAT :
-            selectedFormat === CommitFormat.SEMANTIC ? SEMANTIC_FORMAT :
-            selectedFormat === CommitFormat.ANGULAR ? ANGULAR_FORMAT :
-            selectedFormat === CommitFormat.ISSUE_REFERENCE ? ISSUE_FORMAT :
-            CONVENTIONAL_FORMAT;
-            
-        await storeCommitStyle(template);
-        await storeDefaultFormat(selectedFormat);
-    } else {
-        // Try to load previously learned style
-        const storedStyle = await getStoredCommitStyle(flags.author);
-        if (storedStyle) {
-            const formatName = selectedFormat.charAt(0).toUpperCase() + selectedFormat.slice(1);
-            console.log("\n" + COLORS.header("Format:") + " " + COLORS.info(formatName) + 
-                (flags.author ? ` (customized for ${flags.author})` : 
-                 selectedFormat === CommitFormat.REPO ? " (learned from repository)" : 
-                 " (default)"));
+        // Found a matching format, store it
+        if (Object.values(CommitFormat).some(f => f.startsWith(formatInput))) {
+            await storeDefaultFormat(selectedFormat);
         }
     }
 
-    if (!selectedFormat) {
-        // Only show format selection on first use
-        const formatChoices = {
-            '1': CommitFormat.CONVENTIONAL,
-            '2': CommitFormat.SEMANTIC,
-            '3': CommitFormat.ANGULAR,
-            '4': CommitFormat.KERNEL,
-            '5': CommitFormat.ISSUE_REFERENCE
-        };
-
-        console.log("\nChoose default commit format:");
-        console.log("1. Conventional (recommended)");
-        console.log("2. Semantic (with emojis)");
-        console.log("3. Angular");
-        console.log("4. Linux Kernel");
-        console.log("5. Issue Reference ([#123]: description)");
-
-        const formatChoice = prompt("Select format (1-5): ") || "1";
-        selectedFormat = formatChoices[formatChoice as keyof typeof formatChoices] || CommitFormat.CONVENTIONAL;
-        
-        // Store the choice
-        await storeDefaultFormat(selectedFormat);
-        console.log(`\nSaved ${selectedFormat} as your default commit format.`);
-        console.log('You can change this later with --format flag or by deleting ~/.config/auto-commit/default-format');
+    // Get the staged files
+    const stagedFiles = await getStagedFiles();
+    if (stagedFiles.length === 0) {
+        console.error(COLORS.error("Error:") + " No staged changes found. Please stage changes before generating a commit message.");
+        return;
     }
 
-    try {
-        // Move selectedIssue outside the try block so it persists across retries
-        const selectedIssue = await searchAndSelectIssue();
+    // Show the staged files
+    console.log("\n" + COLORS.bold("Staged files:"));
+    console.log(createFileTree(stagedFiles));
+
+    // Get the diff
+    const diff = await getDiff();
+
+    // Search for related issues if we need issue format or if --issue flag is used
+    let selectedIssue = null;
+    if (flags.issue || selectedFormat === CommitFormat.ISSUE_REFERENCE) {
+        selectedIssue = await searchAndSelectIssue(diff, apiKey, provider);
         
-        while (true) { // Add loop for retries
-            const diff = await getDiff();
-            const systemPrompt = getFormatTemplate(selectedFormat);
-
-            if (!apiKey) {
-                throw new Error("API key is required");
-            }
-            const commitMessage = await getCommitMessage(diff, apiKey, systemPrompt, selectedIssue, selectedFormat);
-
-            // Show staged files first with bold header
-            console.log(`\n${COLORS.header("Staged files to be committed:")}`);
-            const stagedFiles = await getStagedFiles();
-            console.log(createBox(createFileTree(stagedFiles).join('\n')));
-
-            const proceed = prompt("\nGenerate commit message for these files? (y/n) ");
-            if (proceed?.toLowerCase() !== 'y') {
+        // If user specified --issue flag explicitly but didn't select an issue, ask if they want to continue
+        if (!selectedIssue && flags.issue && selectedFormat !== CommitFormat.ISSUE_REFERENCE) {
+            const continueWithoutIssue = prompt("No issue selected. Continue without issue reference? (y/n): ");
+            if (continueWithoutIssue?.toLowerCase() !== 'y') {
+                console.log(COLORS.dim("Commit aborted"));
                 return;
             }
+        }
+    }
 
-            displayCommitMessage(commitMessage);
+    // Get the system prompt based on the format
+    let systemPrompt = `You are an expert in git commit message styling and formatting.
+    
+I need you to generate a clear, comprehensive commit message for my staged changes.
 
-            // Format action keys in bold
-            const choice = prompt(`\n${COLORS.action("(a)")}ccept, ${COLORS.action("(e)")}dit, ${COLORS.action("(r)")}eject, ${COLORS.action("(n)")}ew message? `);
-            
-            switch (choice?.toLowerCase()) {
-                case 'a':
-                    await commitChanges(commitMessage);
-                    return;
-                case 'e': {
-                    const editedMessage = await editInEditor(commitMessage);
-                    if (editedMessage) {
-                        await commitChanges(editedMessage);
-                    }
-                    return;
+${getFormatTemplate(selectedFormat)}`;
+
+    // Fetch the user-specific or repo-specific commit style if available
+    const customStyle = flags.author 
+        ? await getStoredCommitStyle(flags.author.toString()) 
+        : await getStoredCommitStyle();
+    
+    if (customStyle && (selectedFormat === CommitFormat.CUSTOM || selectedFormat === CommitFormat.REPO)) {
+        systemPrompt = `You are an expert in git commit message styling and formatting.
+        
+I need you to generate a clear, comprehensive commit message for my staged changes following this specific style guide:
+
+${customStyle}`;
+    }
+
+    // Get the commit message
+    try {
+        const commitMessage = await getCommitMessage(diff, apiKey, systemPrompt, selectedIssue, selectedFormat, provider);
+        
+        // Display the commit message
+        displayCommitMessage(commitMessage);
+        
+        const answer = prompt("(a)ccept, (e)dit, (r)eject, (n)ew message? ");
+        
+        switch (answer?.toLowerCase()) {
+            case "a":
+                await commitChanges(commitMessage);
+                console.log(COLORS.success("Commit successful!"));
+                break;
+            case "e":
+                const editedMessage = await editInEditor(commitMessage);
+                if (editedMessage.trim() !== "") {
+                    await commitChanges(editedMessage);
+                    console.log(COLORS.success("Commit successful!"));
+                } else {
+                    console.log(COLORS.dim("Commit aborted"));
                 }
-                case 'n':
-                    continue; // Continue the loop instead of calling main() recursively
-                case 'r':
-                    console.log("\n✗ Commit message rejected.");
-                    return;
-                default:
-                    console.log("\n✗ Invalid choice. Commit cancelled.");
-                    return;
-            }
+                break;
+            case "n":
+                console.log("Generating new message...");
+                main();
+                break;
+            default:
+                console.log(COLORS.dim("Commit aborted"));
+                break;
         }
     } catch (error) {
-        console.error("An error occurred:", error);
+        console.error(COLORS.error("Error:") + " Failed to generate commit message:", error);
     }
 }
 
-// Run main only when directly executed
-if (import.meta.main) {
+// Run the main function
+try {
     main();
+} catch (error) {
+    console.error(COLORS.error("Error:") + " ", error);
 }

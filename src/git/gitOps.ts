@@ -1,3 +1,5 @@
+/// <reference lib="deno.ns" />
+
 export async function getDiff(): Promise<string> {
     const command = new Deno.Command("git", {
         args: ["diff", "--staged"],
@@ -14,7 +16,7 @@ export async function getDiff(): Promise<string> {
     return new TextDecoder().decode(output.stdout);
 }
 
-export async function getCommitHistory(author?: string, limit = 50): Promise<string> {
+export async function getCommitHistory(author?: string, limit = 50): Promise<string[]> {
     const args = ["log", `-${limit}`, "--pretty=format:%s%n%b%n---"];
     if (author) {
         args.push(`--author=${author}`);
@@ -31,7 +33,9 @@ export async function getCommitHistory(author?: string, limit = 50): Promise<str
         throw new Error(`Failed to get commit history: ${new TextDecoder().decode(output.stderr)}`);
     }
 
-    return new TextDecoder().decode(output.stdout);
+    const history = new TextDecoder().decode(output.stdout);
+    // Split the history by commit separator and filter out empty entries
+    return history.split('---').filter(commit => commit.trim() !== '');
 }
 
 export async function getStagedFiles(): Promise<string[]> {

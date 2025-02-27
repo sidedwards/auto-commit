@@ -7,6 +7,10 @@ Automatically generate git commit messages using Claude 3 Haiku. Analyzes your s
 ## Features
 
 - Generates clear, concise commit messages from staged changes
+- Supports multiple LLM providers:
+  - Anthropic Claude (default)
+  - OpenAI GPT models
+  - Ollama (local LLMs)
 - Supports multiple commit formats:
   - Conventional Commits (default)
   - Angular
@@ -101,6 +105,50 @@ auto-commit --learn
 auto-commit --learn --author="user@example.com"
 ```
 
+## LLM Provider Options
+
+```bash
+# List all available models
+auto-commit --list-models
+
+# List models for a specific provider
+auto-commit --list-models --provider=anthropic
+auto-commit --list-models --provider=openai
+auto-commit --list-models --provider=ollama
+
+# Using different LLM providers
+auto-commit --provider=anthropic  # default
+auto-commit --provider=openai     # Use OpenAI GPT models
+auto-commit --provider=ollama     # Use local LLMs via Ollama
+
+# Specify a model for the selected provider
+auto-commit --provider=anthropic --model=claude-3-opus-20240229
+auto-commit --provider=openai --model=gpt-4o
+auto-commit --provider=ollama --model=llama3
+
+# When using Ollama, you can specify a custom base URL
+auto-commit --provider=ollama --base-url=http://localhost:11434
+```
+
+### Available Models
+
+#### Anthropic Claude Models
+- `claude-3-haiku-20240307` (default) - Fast, compact model for everyday tasks
+- `claude-3-sonnet-20240229` - Balanced performance and intelligence
+- `claude-3-opus-20240229` - Most powerful model, highest reasoning capabilities
+
+#### OpenAI Models
+- `gpt-3.5-turbo` (default) - Fast, efficient for most tasks
+- `gpt-4o` - Latest model with enhanced reasoning
+- `gpt-4-turbo` - Improved reasoning capabilities
+
+#### Ollama Models
+Available models depend on what's installed in your Ollama instance. Examples:
+- `llama3` (default) - Meta's latest Llama model
+- `mistral` - Mistral 7B model
+- `mixtral` - Mixtral 8x7B model
+- `codellama` - Model optimized for code generation
+
 Example output:
 ```
 Proposed commit:
@@ -121,7 +169,10 @@ Proposed commit:
 
 ## Configuration
 
-On first run, you'll be prompted to enter your [Anthropic API key](https://console.anthropic.com/account/keys).
+On first run, you'll be prompted to enter your API key for the selected LLM provider:
+- [Anthropic API key](https://console.anthropic.com/account/keys) (default)
+- [OpenAI API key](https://platform.openai.com/api-keys) (if using OpenAI provider)
+- No API key needed for Ollama (just needs the Ollama server running)
 
 ### Commit Formats
 
@@ -194,7 +245,8 @@ auto-commit --format kernel       # Linux style
 - Git
 - GitHub CLI (gh) - for issue integration
 - Vim (for editing commit messages)
-- Anthropic API key
+- API keys for selected LLM providers (Anthropic/OpenAI)
+- Ollama running locally (if using the Ollama provider)
 
 ## License
 

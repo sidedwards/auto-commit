@@ -49,12 +49,12 @@ Return ONLY the style guide, formatted as rules to follow.`;
 function getDefaultModelForProvider(provider: LLMProvider): string {
     switch (provider) {
         case LLMProvider.ANTHROPIC:
-            return "claude-3-haiku-20240307";
+            return "claude-3-5-haiku-20241022";
         case LLMProvider.OPENAI:
-            return "gpt-3.5-turbo";
+            return "gpt-4o-mini";
         case LLMProvider.OLLAMA:
             return "llama3";
         default:
-            return "claude-3-haiku-20240307";
+            return "claude-3-5-haiku-20241022";
     }
 }

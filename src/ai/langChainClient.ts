@@ -20,20 +20,15 @@ type LLMOptions = {
 // Common models by provider (for informational purposes only)
 export const COMMON_MODELS = {
   [LLMProvider.ANTHROPIC]: [
-    "claude-3-haiku-20240307",
-    "claude-3-sonnet-20240229", 
-    "claude-3-opus-20240229",
-    "claude-2.1",
-    "claude-2.0",
-    "claude-instant-1.2"
+    "claude-3-5-haiku-20241022",
+    "claude-3-5-sonnet-20241022", 
+    "claude-3-7-sonnet-20250219"
   ],
   [LLMProvider.OPENAI]: [
-    "gpt-3.5-turbo",
-    "gpt-3.5-turbo-16k", 
-    "gpt-4",
-    "gpt-4-32k", 
-    "gpt-4-turbo",
-    "gpt-4o"
+    "gpt-4o-mini",
+    "gpt-4o",
+    "o3-mini",
+    "o1"
   ],
   [LLMProvider.OLLAMA]: [
     "llama3",

@@ -121,11 +121,9 @@ export function displayAvailableModels(provider?: LLMProvider): void {
 
     if (!provider || provider === LLMProvider.ANTHROPIC) {
         console.log(`\n${COLORS.bold("Anthropic Claude Models:")}
-  ${COLORS.info("claude-3-haiku-20240307")} (default) - Fast, compact model for everyday tasks
-  ${COLORS.info("claude-3-sonnet-20240229")} - Balanced performance and intelligence
-  ${COLORS.info("claude-3-opus-20240229")} - Most powerful model, highest reasoning capabilities
-  ${COLORS.info("claude-2.1")} - Older generation model
-  ${COLORS.info("claude-instant-1.2")} - Fast, older generation model
+  ${COLORS.info("claude-3-5-haiku-20241022")} (default) - Fast, compact model for everyday tasks
+  ${COLORS.info("claude-3-5-sonnet-20241022")} - Balanced performance and intelligence
+  ${COLORS.info("claude-3-7-sonnet-20250219")} - Most powerful with reasoning
   
   ${COLORS.dim("For a complete list of supported models, see Anthropic's documentation:")
   }
@@ -134,10 +132,10 @@ export function displayAvailableModels(provider?: LLMProvider): void {
 
     if (!provider || provider === LLMProvider.OPENAI) {
         console.log(`\n${COLORS.bold("OpenAI Models:")}
-  ${COLORS.info("gpt-3.5-turbo")} (default) - Fast, efficient for most tasks
+  ${COLORS.info("gpt-4o-mini")} (default) - Fast, cost-effective for most tasks
   ${COLORS.info("gpt-4o")} - Latest model with enhanced reasoning
-  ${COLORS.info("gpt-4-turbo")} - Improved reasoning capabilities
-  ${COLORS.info("gpt-4")} - Strong reasoning model
+  ${COLORS.info("o3-mini")} - Fast and flexible with reasoning
+  ${COLORS.info("o1")} - High intelligence with reasoning
   
   ${COLORS.dim("For a complete list of supported models, see OpenAI's documentation:")
   }
